@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>기억해줘 · 실종경보</title>
+<meta name="description" content="실종경보를 일반 안전안내와 구분해 보여주고, 실종자의 특징을 기억해 제보하도록 돕는 서비스 (가상 데이터 시연)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#1C1B22;--ink-2:#4B4A55;--ink-3:#5E5C66;
+  --bg:#F3F3F6;--card:#FFFFFF;--soft:#F5F4F0;--line:#DEDCE6;
+  --violet:#5B3FD0;--deep:#2D1F7A;--tint:#ECE8FB;--vtext:#3C2A9E;
+  --teal:#1F6F5C;--teal-tint:#E2F1EC;
+  --font:'IBM Plex Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.6;word-break:keep-all;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+button,input{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer}
+a{color:var(--vtext)}
+:focus-visible{outline:3px solid var(--violet);outline-offset:2px;border-radius:8px}
+
+/* header */
+.top{position:sticky;top:0;z-index:20;background:rgba(243,243,246,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top-in{display:flex;align-items:center;gap:16px;height:60px;padding:0 20px;max-width:1440px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;color:var(--ink);text-decoration:none;white-space:nowrap}
+.mark{width:28px;height:28px;border-radius:8px;background:var(--violet);display:grid;place-items:center}
+.demo{font-size:11px;font-weight:600;color:var(--vtext);background:var(--tint);padding:3px 8px;border-radius:999px;white-space:nowrap}
+.top .sp{flex:1}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 16px;border-radius:12px;font-weight:600;border:1px solid #BDBACB;background:var(--card);text-decoration:none;color:var(--ink)}
+.btn.primary{background:var(--deep);color:#fff;border-color:var(--deep)}
+.btn.small{min-height:38px;padding:0 12px;font-size:14px}
+.ghost-link{font-size:14px;color:var(--ink-2);text-decoration:none}
+@media (max-width:560px){.ghost-link,.demo{display:none}}
+
+/* layout */
+.app{max-width:1440px;margin:0 auto;padding:20px;display:grid;gap:20px;grid-template-columns:320px minmax(0,1fr) 340px;align-items:start}
+.col-list,.col-report{position:sticky;top:80px}
+@media (max-width:1199px){.app{grid-template-columns:300px minmax(0,1fr)}.col-report{position:static;grid-column:2}}
+@media (max-width:899px){
+  .app{grid-template-columns:1fr;padding:12px 12px 32px}
+  .col-list,.col-report{position:static;grid-column:auto}
+  body[data-view="list"] .col-detail, body[data-view="list"] .col-report{display:none}
+  body[data-view="detail"] .col-list, body[data-view="detail"] .col-report{display:none}
+  body[data-view="report"] .col-list, body[data-view="report"] .col-detail{display:none}
+}
+.desk-only{}
+.mob-only{display:none}
+@media (max-width:899px){.desk-only{display:none}.mob-only{display:flex}}
+
+/* list */
+.panel-h{display:flex;align-items:center;justify-content:space-between;margin:0 0 12px}
+.panel-h h2{font-size:17px;margin:0}
+.tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.tabs button{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;color:var(--ink-2);min-height:36px}
+.tabs button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.list{display:flex;flex-direction:column;gap:10px;list-style:none;margin:0;padding:0}
+.item{width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:flex;gap:12px;align-items:center}
+.item[aria-current="true"]{border:2px solid var(--violet);padding:11px}
+.item .thumb{width:48px;height:58px;border-radius:10px;background:#E6E4DE;flex-shrink:0;display:grid;place-items:center;font-size:10px;color:var(--ink-3)}
+.item .ti{font-weight:700;font-size:15px;line-height:1.35}
+.item .su{font-size:13px;color:var(--ink-2);line-height:1.45}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;margin-bottom:4px}
+.badge.s{background:var(--tint);color:var(--vtext)}
+.badge.f{background:var(--teal-tint);color:var(--teal)}
+.item.found{opacity:.85}
+.new{animation:pop .6s cubic-bezier(.2,.8,.2,1)}
+@keyframes pop{from{transform:translateY(-10px);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.new,.toast{animation:none!important}}
+
+/* detail */
+.card{background:var(--card);border-radius:18px;padding:18px;border:1px solid var(--line)}
+.stack{display:flex;flex-direction:column;gap:14px}
+.back{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;font-weight:600;padding:0;min-height:44px;color:var(--ink-2)}
+.hero{background:var(--violet);color:#fff;border-radius:18px;padding:20px 22px;display:flex;flex-direction:column;gap:6px}
+.hero .meta{display:flex;align-items:center;gap:8px;font-size:14px;flex-wrap:wrap}
+.hero .pill{background:#fff;color:var(--violet);font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px}
+.hero h1{margin:0;font-size:clamp(24px,3vw,32px);line-height:1.25}
+.hero .sub{font-size:14px}
+.hero.found{background:var(--teal)}
+.lbl{font-size:13px;font-weight:600;color:var(--ink-2)}
+.mem-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.mem-h strong{font-size:17px}
+.ai{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--tint);color:var(--vtext)}
+.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.three div{background:var(--soft);border-radius:14px;padding:14px 8px;text-align:center;font-weight:700;font-size:16px;line-height:1.3}
+.three i{display:block;width:40px;height:40px;border-radius:11px;margin:0 auto 10px;border:1.5px solid transparent}
+.fine{font-size:12px;color:var(--ink-3);margin:10px 0 0}
+.duo{display:grid;grid-template-columns:3fr 2fr;gap:14px}
+.photo{min-height:240px;border-radius:14px;background:#E6E4DE;display:grid;place-items:center;text-align:center;font-size:13px;color:var(--ink-2);padding:12px}
+.sil{border-radius:14px;background:#F1EFFB;display:grid;place-items:center;min-height:240px}
+.facts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.facts span{font-size:13px;background:var(--soft);padding:5px 10px;border-radius:999px}
+.map{position:relative;height:200px;border-radius:14px;overflow:hidden;background:#E9EDE4;margin-top:10px}
+.map .tag{position:absolute;font-size:11px;background:rgba(255,255,255,.85);padding:2px 6px;border-radius:4px}
+.place{font-size:16px;font-weight:600;margin-top:10px}
+.tl{list-style:none;margin:12px 0 0;padding:0}
+.tl li{display:flex;gap:12px;padding:0 0 14px;position:relative}
+.tl li::before{content:"";position:absolute;left:5px;top:16px;bottom:0;width:2px;background:var(--line)}
+.tl li:last-child::before{display:none}
+.tl .dot{width:12px;height:12px;border-radius:50%;background:var(--violet);margin-top:6px;flex-shrink:0}
+.tl .dot.f{background:var(--teal)}
+.tl time{font-size:13px;color:var(--ink-3);min-width:44px}
+details.orig summary{cursor:pointer;font-size:14px;font-weight:600;color:var(--ink-2);min-height:32px}
+details.orig p{margin:8px 0 0;font-size:14px;color:var(--ink-2);background:var(--soft);padding:12px;border-radius:12px}
+.found-box{background:var(--teal-tint);border-radius:14px;padding:16px;color:#164F42}
+
+/* report */
+.rep h2{font-size:17px;margin:0 0 4px}
+.rep .who{font-size:13px;color:var(--ink-2);margin:0 0 14px}
+.q{font-size:14px;font-weight:700;margin:16px 0 8px;display:block}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{min-height:42px;padding:0 14px;border-radius:10px;border:1px solid #CBC8D6;background:#fff;font-size:14px}
+.chip[aria-pressed="true"]{border:2px solid var(--violet);background:var(--tint);color:var(--vtext);font-weight:700}
+.field{width:100%;min-height:44px;border-radius:10px;border:1px solid #CBC8D6;padding:0 12px;background:#fff}
+.out{background:var(--tint);border-radius:14px;padding:14px;margin-top:16px}
+.out .lbl{color:var(--vtext)}
+.out p{margin:6px 0 0;font-size:15px;font-weight:500;line-height:1.6}
+.rep .act{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.rep .note{font-size:12px;color:var(--ink-3);text-align:center;margin:4px 0 0}
+.empty{color:var(--ink-3);font-size:14px}
+
+/* toast (push simulation) */
+.toast-wrap{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top,0px) + 70px);display:flex;justify-content:center;z-index:50;pointer-events:none;padding:0 12px}
+.toast{pointer-events:auto;width:min(400px,100%);background:#fff;border:3px solid var(--violet);border-radius:20px;overflow:hidden;box-shadow:0 12px 32px rgba(28,27,34,.18);animation:drop .45s cubic-bezier(.2,.8,.2,1);text-align:left;padding:0}
+@keyframes drop{from{transform:translateY(-24px);opacity:0}to{transform:none;opacity:1}}
+.toast .bar{background:var(--violet);color:#fff;padding:9px 14px;font-size:13px;display:flex;gap:8px;align-items:center}
+.toast .bd{padding:12px 14px;display:flex;gap:12px;align-items:center}
+.toast .bd .thumb{width:52px;height:62px;border-radius:10px;background:#E6E4DE;flex-shrink:0}
+.toast .t1{font-weight:700;font-size:16px}
+.toast .t2{font-size:13px;color:var(--ink-2)}
+.copied{font-size:12px;color:var(--teal);text-align:center;min-height:18px;margin:0}
+footer{max-width:1440px;margin:0 auto;padding:8px 20px 28px;font-size:12px;color:var(--ink-3)}
+</style>
+</head>
+<body data-view="list">
+
+<header class="top">
+  <div class="top-in">
+    <a class="brand" href="#" id="home" aria-label="기억해줘 목록으로">
+      <span class="mark" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="8" r="4"/><path d="M3 20c0-3.5 3-6 7-6"/><circle cx="17" cy="16" r="3"/><path d="M19.2 18.2 21.5 20.5"/></svg></span>
+      기억해줘
+    </a>
+    <span class="demo">가상 데이터 시연</span>
+    <span class="sp"></span>
+    <a class="ghost-link" href="about.html">서비스 소개</a>
+    <a class="ghost-link" href="https://github.com/kimminseo060324-svg/missing-alert-care" rel="noopener">GitHub</a>
+    <button class="btn primary small" id="fire" type="button">테스트 경보 발령</button>
+  </div>
+</header>
+
+<div class="app">
+  <aside class="col-list" aria-label="실종경보 목록">
+    <div class="panel-h"><h2>내 주변 실종경보</h2><span class="lbl" id="count"></span></div>
+    <div class="tabs" role="group" aria-label="상태 필터">
+      <button type="button" data-f="all" aria-pressed="true">전체</button>
+      <button type="button" data-f="searching" aria-pressed="false">수색 중</button>
+      <button type="button" data-f="found" aria-pressed="false">발견 완료</button>
+    </div>
+    <ul class="list" id="list"></ul>
+  </aside>
+
+  <main class="col-detail" id="detail" aria-live="polite"></main>
+
+  <aside class="col-report" id="report" aria-label="제보 도우미"></aside>
+</div>
+
+<footer>이 웹페이지의 실종자 정보, 사진, 장소는 모두 시연을 위한 가상 데이터입니다. 실제 서비스에서는 경찰청 안전Dream의 공개 정보를 출처와 함께 표시합니다. 실제 실종자를 목격했다면 112 또는 182로 연락하세요.</footer>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script>
+(function(){
+  var DATA = [
+    {id:'A-1031',status:'searching',name:'김○○',sex:'남',age:82,height:165,body:'마른 체형',
+     issued:'14:20',distance:'1.2km',lastSeen:{place:'○○동 ○○공원 부근',time:'13:40경'},
+     features:[{label:'남색 점퍼',color:'#1F2E5C'},{label:'흰색 모자',color:'#FFFFFF'},{label:'지팡이 사용',color:'#6B4F2A'}],
+     others:['회색 바지','흰 운동화'],
+     sil:{cap:'#FFFFFF',top:'#1F2E5C',bottom:'#8C8B91',shoes:'#FFFFFF',cane:true},
+     original:'[○○경찰서] ○○동에서 배회중인 김○○씨(남, 82세)를 찾습니다. 165cm, 마른 체형, 남색 점퍼, 회색 바지, 흰색 모자, 흰 운동화, 지팡이 사용. 13시 40분경 ○○공원 부근 마지막 목격.',
+     timeline:[{t:'14:20',x:'실종경보 발령'},{t:'15:10',x:'정보 갱신 · 마지막 목격 장소 추가'}]},
+    {id:'A-1032',status:'searching',name:'이○○',sex:'여',age:9,height:130,body:'보통 체형',
+     issued:'15:35',distance:'2.8km',lastSeen:{place:'○○초등학교 후문 앞',time:'15:00경'},
+     features:[{label:'노란 우비',color:'#F2C230'},{label:'하늘색 책가방',color:'#8EC5F0'},{label:'분홍 운동화',color:'#F2A7C3'}],
+     others:['검정 레깅스','단발머리'],
+     sil:{cap:null,top:'#F2C230',bottom:'#2A2A30',shoes:'#F2A7C3',cane:false,bag:'#8EC5F0'},
+     original:'[○○경찰서] ○○초등학교 인근에서 실종된 이○○양(여, 9세)을 찾습니다. 130cm, 보통 체형, 단발머리, 노란 우비, 검정 레깅스, 분홍 운동화, 하늘색 책가방. 15시경 ○○초등학교 후문 앞 마지막 목격.',
+     timeline:[{t:'15:35',x:'실종경보 발령'}]},
+    {id:'A-1029',status:'found',name:'박○○',sex:'여',age:76,height:152,body:'',
+     issued:'09:10',distance:'3.4km',lastSeen:{place:'',time:''},features:[],others:[],sil:null,original:'',
+     timeline:[{t:'09:10',x:'실종경보 발령'},{t:'10:30',x:'정보 갱신'},{t:'12:05',x:'발견 완료 · 시민 제보로 발견',f:true}]}
+  ];
+  var EXTRA = {id:'A-1033',status:'searching',name:'최○○',sex:'남',age:27,height:178,body:'건장한 체형',
+     issued:'방금',distance:'0.6km',lastSeen:{place:'○○역 2번 출구',time:'방금 전'},
+     features:[{label:'형광 조끼',color:'#C8E83A'},{label:'검정 백팩',color:'#2A2A30'},{label:'청바지',color:'#3E5C8A'}],
+     others:['흰 티셔츠','검정 운동화'],
+     sil:{cap:null,top:'#C8E83A',bottom:'#3E5C8A',shoes:'#2A2A30',cane:false,bag:'#2A2A30'},
+     original:'[○○경찰서] ○○역 인근에서 실종된 최○○씨(남, 27세)를 찾습니다. 178cm, 건장한 체형, 흰 티셔츠 위 형광 조끼, 청바지, 검정 운동화, 검정 백팩. ○○역 2번 출구 마지막 목격.',
+     timeline:[{t:'방금',x:'실종경보 발령'}]};
+
+  var state = {filter:'all', sel:'A-1031', fired:false, rep:{when:'방금', where:'', feats:{}}};
+  var $ = function(id){return document.getElementById(id)};
+  var mobile = function(){return window.matchMedia('(max-width:899px)').matches};
+  function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+  function byId(id){for(var i=0;i<DATA.length;i++) if(DATA[i].id===id) return DATA[i]; return null}
+  function sexWord(a){return a.sex==='남'?'남성':'여성'}
+  function personWord(a){ if(a.age<14) return a.sex==='남'?'남자 어린이':'여자 어린이'; if(a.age<20) return '청소년 '+sexWord(a); return Math.floor(a.age/10)*10+'대 '+sexWord(a)}
+
+  function silhouette(s){
+    var cap = s.cap ? '<path d="M33 22Q55 4 77 22l3 6H30z" fill="'+s.cap+'" stroke="#8A8794" stroke-width="2"/>' : '<path d="M40 34q15-22 30 0v10H40z" fill="#3B3530"/>';
+    var bag = s.bag ? '<rect x="72" y="66" width="18" height="34" rx="5" fill="'+s.bag+'"/>' : '';
+    var cane = s.cane ? '<line x1="94" y1="118" x2="100" y2="192" stroke="#6B4F2A" stroke-width="4" stroke-linecap="round"/>' : '';
+    return '<svg width="100" height="190" viewBox="0 0 110 200" role="img" aria-label="옷차림 실루엣">'+bag+
+      '<circle cx="55" cy="44" r="14" fill="#D3D0C8"/>'+cap+
+      '<path d="M30 62q25-8 50 0l10 52-10 2-3-30-1 34H34l-1-34-3 30-10-2z" fill="'+s.top+'" stroke="rgba(0,0,0,.12)"/>'+
+      '<circle cx="18" cy="118" r="5" fill="#D3D0C8"/><circle cx="92" cy="118" r="5" fill="#D3D0C8"/>'+
+      '<path d="M35 120h40l-2 54H59l-4-44-4 44H37z" fill="'+s.bottom+'"/>'+
+      '<rect x="33" y="174" width="20" height="9" rx="4" fill="'+s.shoes+'" stroke="#8A8794" stroke-width="1.5"/>'+
+      '<rect x="57" y="174" width="20" height="9" rx="4" fill="'+s.shoes+'" stroke="#8A8794" stroke-width="1.5"/>'+cane+'</svg>';
+  }
+
+  function renderList(){
+    var items = DATA.filter(function(a){return state.filter==='all'||a.status===state.filter});
+    var n = DATA.filter(function(a){return a.status==='searching'}).length;
+    $('count').textContent = '수색 중 '+n+'건';
+    $('list').innerHTML = items.map(function(a){
+      var f = a.status==='found';
+      return '<li><button type="button" class="item'+(f?' found':'')+(a._new?' new':'')+'" data-id="'+a.id+'" aria-current="'+(a.id===state.sel)+'">'+
+        '<span class="thumb" aria-hidden="true">'+(f?'':'사진')+'</span><span>'+
+        '<span class="badge '+(f?'f':'s')+'">'+(f?'발견 완료':'수색 중')+'</span>'+
+        '<span class="ti" style="display:block">'+a.age+'세 '+sexWord(a)+(f?'':' · '+a.distance)+'</span>'+
+        '<span class="su" style="display:block">'+(f?'안전하게 발견됐어요':esc(a.features.map(function(x){return x.label}).slice(0,2).join(' · ')))+'</span>'+
+        '</span></button></li>';
+    }).join('') || '<li class="empty">해당하는 경보가 없어요.</li>';
+    DATA.forEach(function(a){a._new=false});
+  }
+
+  function renderDetail(){
+    var a = byId(state.sel);
+    if(!a){$('detail').innerHTML='<div class="card empty">왼쪽 목록에서 경보를 선택하세요.</div>';return}
+    var back = '<button type="button" class="back mob-only" data-go="list"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg>목록</button>';
+    var tl = '<ul class="tl">'+a.timeline.map(function(t){return '<li><span class="dot'+(t.f?' f':'')+'"></span><time>'+esc(t.t)+'</time><span>'+esc(t.x)+'</span></li>'}).join('')+'</ul>';
+    if(a.status==='found'){
+      $('detail').innerHTML = '<div class="stack">'+back+
+        '<div class="hero found"><div class="meta"><span class="pill" style="color:var(--teal)">발견 완료</span><span>경보 종료</span></div><h1>'+a.age+'세 '+sexWord(a)+' 실종자가 안전하게 발견됐어요</h1><div class="sub">관심과 제보에 감사드립니다.</div></div>'+
+        '<div class="card"><div class="found-box">개인정보 보호를 위해 사진, 옷차림, 목격 장소 등 상세 정보는 삭제했어요.</div></div>'+
+        '<div class="card"><span class="lbl">경보 진행 기록</span>'+tl+'</div></div>';
+      return;
+    }
+    var three = a.features.map(function(f){
+      var border = f.color.toUpperCase()==='#FFFFFF' ? 'border-color:#8A8794;' : '';
+      var parts = f.label.split(' ');
+      return '<div><i style="background:'+f.color+';'+border+'"></i>'+esc(parts[0])+'<br>'+esc(parts.slice(1).join(' '))+'</div>';
+    }).join('');
+    $('detail').innerHTML = '<div class="stack">'+back+
+      '<div class="hero"><div class="meta"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="8" r="4"/><path d="M3 20c0-3.5 3-6 7-6"/><circle cx="17" cy="16" r="3"/><path d="M19.2 18.2 21.5 20.5"/></svg><strong>실종경보</strong><span class="pill">수색 중</span><span style="margin-left:auto">내 위치에서 '+a.distance+'</span></div>'+
+      '<h1>'+esc(a.name)+' 씨 ('+a.sex+', '+a.age+'세)</h1><div class="sub">'+esc(a.issued)+' 발령 · 진행 기록 '+a.timeline.length+'건</div></div>'+
+      '<div class="card"><div class="mem-h"><strong>이것만 기억하세요</strong><span class="ai">AI 선정</span></div><div class="three">'+three+'</div>'+
+      '<details class="orig"><summary>원문 문자 보기</summary><p>'+esc(a.original)+'</p></details></div>'+
+      '<div class="card"><div class="duo"><div><span class="lbl">공식 사진</span><div class="photo" style="margin-top:8px">경찰청 공개 사진 자리<br>(시연용 가상 데이터)<br>발견 시 자동 삭제</div></div>'+
+      '<div><span class="lbl">옷차림</span><div class="sil" style="margin-top:8px">'+silhouette(a.sil)+'</div></div></div>'+
+      '<div class="facts"><span>'+a.height+'cm</span><span>'+esc(a.body)+'</span>'+a.others.map(function(o){return '<span>'+esc(o)+'</span>'}).join('')+'</div></div>'+
+      '<div class="card"><div style="display:flex;justify-content:space-between"><span class="lbl">마지막 목격</span><span class="lbl" style="font-weight:400">'+esc(a.lastSeen.time)+'</span></div>'+
+      '<div class="map"><svg width="100%" height="200" viewBox="0 0 400 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><path d="M-10 160Q90 125 170 148T420 112" stroke="#A9C6E3" stroke-width="16" fill="none" stroke-linecap="round"/><line x1="0" y1="58" x2="400" y2="46" stroke="#fff" stroke-width="9"/><line x1="130" y1="0" x2="152" y2="200" stroke="#fff" stroke-width="9"/><line x1="285" y1="0" x2="268" y2="200" stroke="#fff" stroke-width="7"/><rect x="172" y="72" width="70" height="44" rx="6" fill="#CFE0C3"/><circle cx="208" cy="90" r="52" fill="rgba(91,63,208,.14)" stroke="#5B3FD0" stroke-dasharray="4 4"/><path d="M208 60c-9 0-15 7-15 15 0 11 15 25 15 25s15-14 15-25c0-8-6-15-15-15z" fill="#5B3FD0"/><circle cx="208" cy="75" r="5" fill="#fff"/><circle cx="72" cy="112" r="7" fill="#1E6FD9" stroke="#fff" stroke-width="3"/></svg>'+
+      '<span class="tag" style="left:48px;top:126px">내 위치</span><span class="tag" style="right:10px;bottom:10px">지도 연동 예정</span></div>'+
+      '<div class="place">'+esc(a.lastSeen.place)+'</div></div>'+
+      '<div class="card"><span class="lbl">경보 진행 기록</span>'+tl+'</div>'+
+      '<button type="button" class="btn primary mob-only" data-go="report" style="min-height:56px;font-size:17px">비슷한 분을 봤어요</button>'+
+      '</div>';
+  }
+
+  function sentence(a){
+    var feats = a.features.filter(function(f){return state.rep.feats[f.label]}).map(function(f){return f.label});
+    var who = personWord(a);
+    var obj = /[가-힣]$/.test(who) && ((who.charCodeAt(who.length-1)-0xAC00)%28)>0 ? '을' : '를';
+    var where = state.rep.where.trim() || '[장소]';
+    var s = state.rep.when+' '+where+'에서 '+who+obj+' 봤습니다.';
+    if(feats.length) s += ' '+feats.join(', ')+' 특징이 일치합니다.';
+    s += ' 실종경보의 '+a.name+' 씨와 비슷합니다.';
+    return s;
+  }
+
+  function renderReport(){
+    var a = byId(state.sel);
+    var el = $('report');
+    if(!a || a.status!=='searching'){
+      el.innerHTML = '<div class="card rep"><h2>제보 도우미</h2><p class="empty" style="margin:6px 0 0">'+(a?'종료된 경보예요. 제보가 필요하지 않아요.':'경보를 선택하면 제보를 도와드려요.')+'</p></div>';
+      return;
+    }
+    var whens = ['방금','30분 전','1시간 전'];
+    el.innerHTML = '<div class="card rep">'+
+      '<button type="button" class="back mob-only" data-go="detail"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg>경보로 돌아가기</button>'+
+      '<h2>제보 도우미</h2><p class="who">'+a.age+'세 '+sexWord(a)+' · '+esc(a.features.map(function(f){return f.label}).join(' · '))+'</p>'+
+      '<span class="q">언제 보셨나요?</span><div class="chips">'+whens.map(function(w){return '<button type="button" class="chip" data-when="'+w+'" aria-pressed="'+(state.rep.when===w)+'">'+w+'</button>'}).join('')+'</div>'+
+      '<label class="q" for="where">어디서 보셨나요?</label><input class="field" id="where" type="text" placeholder="○○공원 정문 앞" value="'+esc(state.rep.where)+'">'+
+      '<span class="q">일치하는 특징</span><div class="chips">'+a.features.map(function(f){return '<button type="button" class="chip" data-feat="'+esc(f.label)+'" aria-pressed="'+(!!state.rep.feats[f.label])+'">'+esc(f.label)+'</button>'}).join('')+'</div>'+
+      '<div class="out"><span class="lbl">정리된 제보 내용</span><p id="sent">"'+esc(sentence(a))+'"</p></div>'+
+      '<div class="act"><a class="btn primary" href="tel:182" style="min-height:52px">182 전화하기</a><button type="button" class="btn" id="copy">제보 내용 복사</button><p class="copied" id="copied" aria-live="polite"></p>'+
+      '<p class="note">앱이 자동으로 신고하지 않아요. 긴급한 상황이면 112로 바로 연락하세요.</p></div></div>';
+  }
+
+  function renderAll(){renderList();renderDetail();renderReport()}
+  function select(id){ if(state.sel!==id){state.sel=id;state.rep={when:'방금',where:'',feats:{}}} renderAll(); if(mobile()) go('detail') }
+  function go(v){document.body.setAttribute('data-view',v); window.scrollTo(0,0)}
+
+  document.addEventListener('click',function(e){
+    var t = e.target.closest('button,a'); if(!t) return;
+    if(t.dataset.id){select(t.dataset.id);return}
+    if(t.dataset.go){go(t.dataset.go);return}
+    if(t.dataset.f){state.filter=t.dataset.f;document.querySelectorAll('.tabs button').forEach(function(b){b.setAttribute('aria-pressed',String(b===t))});renderList();return}
+    if(t.dataset.when){state.rep.when=t.dataset.when;renderReport();return}
+    if(t.dataset.feat){var k=t.dataset.feat;state.rep.feats[k]=!state.rep.feats[k];renderReport();return}
+    if(t.id==='copy'){var txt=$('sent').textContent;(navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(function(){$('copied').textContent='복사했어요.'},function(){$('copied').textContent='복사하지 못했어요. 직접 선택해 복사하세요.'});return}
+    if(t.id==='home'){e.preventDefault();go('list');return}
+    if(t.id==='fire'){fire();return}
+    if(t.id==='toastOpen'){$('toastWrap').innerHTML='';select(EXTRA.id);return}
+  });
+  document.addEventListener('input',function(e){
+    if(e.target.id==='where'){state.rep.where=e.target.value;var a=byId(state.sel);if(a)$('sent').textContent='"'+sentence(a)+'"'}
+  });
+
+  function fire(){
+    if(!state.fired){state.fired=true;var x=JSON.parse(JSON.stringify(EXTRA));x._new=true;DATA.unshift(x);renderList()}
+    if(navigator.vibrate){try{navigator.vibrate([300,120,300,120,600])}catch(_){}}
+    $('toastWrap').innerHTML = '<button type="button" class="toast" id="toastOpen" aria-label="새 실종경보 열기">'+
+      '<div class="bar"><strong>실종경보</strong><span>· 내 위치에서 '+EXTRA.distance+'</span><span style="margin-left:auto">방금</span></div>'+
+      '<div class="bd"><span class="thumb" aria-hidden="true"></span><div><div class="t1">'+EXTRA.age+'세 '+sexWord(EXTRA)+' · '+EXTRA.height+'cm</div><div class="t2">'+esc(EXTRA.features.map(function(f){return f.label}).join(' · '))+'</div><div class="t2">'+esc(EXTRA.lastSeen.place)+'</div></div></div></button>';
+    clearTimeout(fire._t); fire._t=setTimeout(function(){$('toastWrap').innerHTML=''},8000);
+  }
+
+  window.addEventListener('resize',function(){ if(!mobile()) document.body.setAttribute('data-view','list') });
+  renderAll();
+})();
+</script>
+</body>
+</html>
