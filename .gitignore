@@ -1,6 +1,8 @@
 # Miscellaneous
 *.class
 *.lock
+# Flutter 앱은 의존성 버전 고정을 위해 pubspec.lock을 커밋한다
+!mobile/pubspec.lock
 *.log
 *.pyc
 *.swp

@@ -129,6 +129,33 @@ https://www.data.go.kr/data/15134001/openapi.do
 - Figma
 - Notion
 
+## 폴더 구조
+
+현재 저장소에는 소개 페이지와 공통 설정 파일만 있습니다. 앱·서버·가상 데이터 폴더는 각 기능 브랜치가 머지되면 추가될 **예정**입니다.
+
+### 현재
+
+```
+missing-alert-care/
+├── index.html      # 기억해줘 웹 서비스 페이지
+├── about.html      # 프로젝트 소개 페이지
+├── .env.example    # 환경변수 예시 (실제 키는 .env에 작성하며 Git에 올리지 않음)
+├── .gitignore
+└── README.md
+```
+
+### 권장 구조 (예정)
+
+```
+missing-alert-care/
+├── mobile/         # (예정) Flutter 앱
+├── backend/        # (예정) FastAPI 서버
+└── sample-data/    # (예정) 개발·시연용 가상 실종경보 데이터
+```
+
+- 폴더 이름은 위 세 가지(`mobile/`, `backend/`, `sample-data/`)로 통일합니다.
+- `sample-data/`에는 가상의 인물과 데이터만 넣고, 실제 개인정보나 실제 API 응답은 넣지 않습니다.
+
 ## MVP 목표
 
 2026 한신 AI·SW 페스티벌 AX 라이프케어 챌린지 출품을 위해 다음 기능을 우선 구현합니다.
