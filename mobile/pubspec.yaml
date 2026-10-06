@@ -1,0 +1,28 @@
+name: gieokhaejwo
+description: "기억해줘 실종경보 앱"
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/data/
+
+  # Noto Sans KR (한글 11,172자 + 영문/숫자/기호만 남긴 가변 글꼴, OFL 라이선스)
+  fonts:
+    - family: NotoSansKR
+      fonts:
+        - asset: assets/fonts/NotoSansKR-Variable.ttf
