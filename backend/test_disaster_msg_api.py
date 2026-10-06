@@ -6,6 +6,8 @@
 import os
 import re
 import sys
+import math
+import time
 import datetime
 from collections import Counter
 from pathlib import Path
@@ -16,6 +18,8 @@ from dotenv import load_dotenv
 URL = "https://www.safetydata.go.kr/V2/api/DSSP-IF-00247"
 MAX_ROWS = 1000  # 이 API가 한 번에 주는 최대 건수 (5000 요청해도 1000건)
 DAYS = int(sys.argv[1]) if len(sys.argv) > 1 else 7
+RETRIES = 3      # 빈 본문일 때 같은 페이지를 다시 요청하는 횟수
+RETRY_WAIT = 2   # 다시 요청하기 전 대기(초)
 
 MISSING_WORDS = ["실종", "찾습니다", "배회"]
 CLOTHES = ["남방", "점퍼", "잠바", "자켓", "재킷", "패딩", "조끼", "셔츠", "상의", "하의", "바지",
@@ -25,19 +29,35 @@ COLORS = ["청색", "검정", "검은", "흰색", "흰", "회색", "빨간", "�
 AGE = re.compile(r"(\d{1,3})\s*세")
 
 
-def fetch_since(key, start):
-    """start(YYYYMMDD) 이후 문자를 모두 받아온다. 응답은 메모리에서만 다룬다."""
-    rows, page = [], 1
-    while True:
+def fetch_page(key, start, page):
+    """한 페이지 요청. 이 API는 가끔 정상 코드(00)와 함께 빈 본문을 주므로 몇 번 다시 요청한다."""
+    for attempt in range(RETRIES + 1):
+        if attempt:
+            time.sleep(RETRY_WAIT)
         r = requests.get(URL, params={"serviceKey": key, "returnType": "json", "crtDt": start,
                                       "pageNo": page, "numOfRows": MAX_ROWS}, timeout=60)
         j = r.json()
         if j["header"]["resultCode"] != "00":
             raise RuntimeError(f"API 오류 {j['header']}")
-        body = j.get("body") or []
+        if j.get("body"):
+            return j["body"], j["totalCount"], r.headers
+    return [], j["totalCount"], r.headers
+
+
+def fetch_since(key, start):
+    """start(YYYYMMDD) 이후 문자를 모두 받아온다. 응답은 메모리에서만 다룬다."""
+    rows, empty, page, pages = [], [], 1, 1
+    while page <= pages:
+        body, total, headers = fetch_page(key, start, page)
+        pages = math.ceil(total / MAX_ROWS)
+        if not body and total:
+            empty.append(page)
+            print(f"[경고] {page}쪽이 {RETRIES}번 다시 요청해도 비어 있어 건너뜀")
         rows += body
-        if not body or len(rows) >= j["totalCount"]:
-            return rows, r.headers
+        page += 1
+    if len(rows) != total:
+        print(f"[경고] 받은 건수 {len(rows)} ≠ totalCount {total} (빈 쪽: {empty or '없음'})")
+    return rows, headers
 
 
 def has_any(text, words):
