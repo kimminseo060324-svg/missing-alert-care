@@ -117,3 +117,14 @@ app.*.symbols
 !**/ios/**/default.perspectivev3
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 !/dev/ci/**/Gemfile.lock
+
+# API 키 및 개인 설정 파일
+.env
+.env.*
+!.env.example
+firebase-service-account.json
+serviceAccountKey.json
+backend/firebase-admin-key.json
+__pycache__/
+.venv/
+build/
