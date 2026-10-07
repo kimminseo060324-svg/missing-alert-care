@@ -42,61 +42,73 @@ class _AlertListScreenState extends State<AlertListScreen> {
             children: [
               ScreenHeader(
                 title: '내 주변 실종경보',
-                centerTitle: false,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text.rich(
-                        TextSpan(
-                          children: [
-                            TextSpan(
-                              text: '수색 중 ',
-                              style: appText(
-                                13,
-                                color: Colors.white.withValues(alpha: 0.8),
-                              ),
-                            ),
-                            TextSpan(
-                              text: '${searching.length}',
-                              style: appText(
-                                40,
-                                weight: FontWeight.w900,
-                                color: Colors.white,
-                                height: 1,
-                              ),
-                            ),
-                            TextSpan(
-                              text: '건',
-                              style: appText(
-                                16,
-                                weight: FontWeight.w700,
+                    if (regions.isNotEmpty) ...[
+                      PillAlign(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.place,
+                                size: 14,
                                 color: Colors.white,
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (regions.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(99),
-                        ),
-                        child: Text(
-                          regions.join(' · '),
-                          style: appText(
-                            13,
-                            weight: FontWeight.w700,
-                            color: Colors.white,
+                              const SizedBox(width: 4),
+                              Text(
+                                regions.join(' · '),
+                                style: appText(
+                                  12,
+                                  weight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
+                      const SizedBox(height: 8),
+                    ],
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '수색 중 ',
+                            style: appText(
+                              13,
+                              color: Colors.white.withValues(alpha: 0.8),
+                            ),
+                          ),
+                          TextSpan(
+                            text: '${searching.length}',
+                            style: appText(
+                              40,
+                              weight: FontWeight.w900,
+                              color: Colors.white,
+                              height: 1,
+                            ),
+                          ),
+                          TextSpan(
+                            text: '건',
+                            style: appText(
+                              16,
+                              weight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),

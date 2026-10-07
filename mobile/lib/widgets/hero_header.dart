@@ -40,7 +40,7 @@ class ScreenHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(
-                height: 52,
+                height: 48,
                 child: centerTitle
                     ? Row(
                         children: [
@@ -64,7 +64,7 @@ class ScreenHeader extends StatelessWidget {
               ),
               if (child != null)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 4, 22, 24),
+                  padding: const EdgeInsets.fromLTRB(32, 0, 32, 16),
                   child: child,
                 ),
             ],
@@ -106,8 +106,8 @@ class HeroInfo extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        chip,
-        const SizedBox(height: 10),
+        PillAlign(child: chip),
+        const SizedBox(height: 6),
         Text(
           title,
           style: appText(22, weight: FontWeight.w800, color: Colors.white),
@@ -119,12 +119,25 @@ class HeroInfo extends StatelessWidget {
             style: appText(15, color: Colors.white.withValues(alpha: 0.85)),
           ),
         ],
-        const SizedBox(height: 10),
+        const SizedBox(height: 6),
         Text(
           meta,
           style: appText(12, color: Colors.white.withValues(alpha: 0.8)),
         ),
       ],
     );
+  }
+}
+
+/// 알약 모양(칩)은 안쪽 여백만큼 왼쪽으로 당겨서,
+/// 칩 안의 글자가 아래 큰 글자와 같은 줄에 서게 해요.
+class PillAlign extends StatelessWidget {
+  const PillAlign({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.translate(offset: const Offset(-10, 0), child: child);
   }
 }

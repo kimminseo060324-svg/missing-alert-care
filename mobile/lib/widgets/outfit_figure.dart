@@ -36,6 +36,13 @@ Color? colorFromText(String text) {
   return null;
 }
 
+/// 신발 색: "흰 운동화"처럼 신발 앞에 색이 있으면 그 색, 없으면 진회색.
+Color _shoeColor(String text) {
+  final m = RegExp(r'(\S+)\s*(운동화|신발|구두|샌들|부츠|슬리퍼)').firstMatch(text);
+  return (m == null ? null : colorFromText(m.group(1)!)) ??
+      const Color(0xFF4A4A52);
+}
+
 /// 얼굴 없는 옷차림 실루엣. 사진 대신 써요.
 /// (경찰청 사진은 쓰지 않고, AI가 옷차림만 그려요.)
 class OutfitFigure extends StatelessWidget {
@@ -49,6 +56,7 @@ class OutfitFigure extends StatelessWidget {
       painter: _OutfitPainter(
         top: colorFromText(alert.clothingTop) ?? AppColors.gray400,
         bottom: colorFromText(alert.clothingBottom) ?? AppColors.gray400,
+        shoe: _shoeColor(alert.clothingBottom),
         unknown: alert.clothingTop.isEmpty && alert.clothingBottom.isEmpty,
       ),
     );
@@ -139,15 +147,18 @@ class _OutfitPainter extends CustomPainter {
   _OutfitPainter({
     required this.top,
     required this.bottom,
+    required this.shoe,
     required this.unknown,
   });
 
   final Color top;
   final Color bottom;
+  final Color shoe;
   final bool unknown;
 
-  // 피그마 "SVG - 옷차림 그림" 좌표를 기준으로 한 그림 영역
-  static const _box = Rect.fromLTWH(104, 26, 66, 122);
+  // 그림 좌표 (가로 100 x 세로 212)
+  static const _box = Rect.fromLTWH(0, 0, 100, 212);
+  static const _skin = Color(0xFFD9D6DF);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -156,65 +167,102 @@ class _OutfitPainter extends CustomPainter {
         : size.height / _box.height;
     canvas.save();
     canvas.translate(
-      (size.width - _box.width * scale) / 2 - _box.left * scale,
-      (size.height - _box.height * scale) / 2 - _box.top * scale,
+      (size.width - _box.width * scale) / 2,
+      (size.height - _box.height * scale) / 2,
     );
     canvas.scale(scale);
 
     final outline = Paint()
-      ..color = const Color(0x33000000)
+      ..color = const Color(0x22000000)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    Paint fill(Color c) => Paint()..color = unknown ? AppColors.line : c;
-
-    void part(RRect r, Color c) {
-      canvas.drawRRect(r, fill(c));
-      canvas.drawRRect(r, outline);
+      ..strokeWidth = 1
+      ..strokeJoin = StrokeJoin.round;
+    Paint fill(Color c) => Paint()
+      ..color = unknown ? AppColors.line : c
+      ..isAntiAlias = true;
+    void draw(Path p, Color c) {
+      canvas.drawPath(p, fill(c));
+      canvas.drawPath(p, outline);
     }
 
-    // 머리 (얼굴 표현 없음)
-    canvas.drawCircle(
-      const Offset(134, 39.5),
-      11.3,
-      fill(const Color(0xFFD9D6DF)),
+    // 바닥 그림자
+    canvas.drawOval(
+      const Rect.fromLTRB(22, 202, 78, 210),
+      Paint()..color = const Color(0x14000000),
     );
-    // 팔
-    part(
-      RRect.fromLTRBR(106.7, 56, 119.4, 94.3, const Radius.circular(6)),
-      top,
-    );
-    part(
-      RRect.fromLTRBR(153.8, 57, 166.5, 95.3, const Radius.circular(6)),
-      top,
-    );
-    // 몸통 (상의)
-    part(
-      RRect.fromLTRBR(109.5, 51.8, 158.5, 97.9, const Radius.circular(10)),
-      top,
-    );
-    // 다리 (하의)
-    part(
-      RRect.fromLTRBR(117, 97.9, 131.2, 139.3, const Radius.circular(3)),
-      bottom,
-    );
-    part(
-      RRect.fromLTRBR(136.8, 97.9, 150.9, 139.3, const Radius.circular(3)),
-      bottom,
-    );
+
+    // 팔 (소매 = 상의 색) + 손
+    final leftArm = Path()
+      ..moveTo(27, 47)
+      ..quadraticBezierTo(20, 50, 19, 60)
+      ..lineTo(14, 104)
+      ..quadraticBezierTo(18, 108, 22, 105)
+      ..lineTo(29, 64)
+      ..close();
+    final rightArm = Path()
+      ..moveTo(73, 47)
+      ..quadraticBezierTo(80, 50, 81, 60)
+      ..lineTo(86, 104)
+      ..quadraticBezierTo(82, 108, 78, 105)
+      ..lineTo(71, 64)
+      ..close();
+    draw(leftArm, top);
+    draw(rightArm, top);
+    canvas.drawCircle(const Offset(17.5, 110), 4.5, fill(_skin));
+    canvas.drawCircle(const Offset(82.5, 110), 4.5, fill(_skin));
+
+    // 하의 (허리 + 두 다리)
+    final pants = Path()
+      ..moveTo(30, 104)
+      ..lineTo(70, 104)
+      ..lineTo(71, 196)
+      ..lineTo(53, 196)
+      ..lineTo(50.5, 128)
+      ..lineTo(49.5, 128)
+      ..lineTo(47, 196)
+      ..lineTo(29, 196)
+      ..close();
+    draw(pants, bottom);
+
     // 신발
-    part(
-      RRect.fromLTRBR(113.3, 138.4, 132.1, 145.9, const Radius.circular(4)),
-      Colors.white,
+    final leftShoe = Path()
+      ..addRRect(
+        RRect.fromLTRBR(25, 194, 48, 203, const Radius.circular(4.5)),
+      );
+    final rightShoe = Path()
+      ..addRRect(
+        RRect.fromLTRBR(52, 194, 75, 203, const Radius.circular(4.5)),
+      );
+    draw(leftShoe, shoe);
+    draw(rightShoe, shoe);
+
+    // 상의 (어깨가 둥근 몸통)
+    final body = Path()
+      ..moveTo(40, 40)
+      ..lineTo(60, 40)
+      ..cubicTo(68, 41, 74, 44, 75, 52)
+      ..lineTo(72, 110)
+      ..quadraticBezierTo(50, 113, 28, 110)
+      ..lineTo(25, 52)
+      ..cubicTo(26, 44, 32, 41, 40, 40)
+      ..close();
+    draw(body, top);
+
+    // 목 + 머리 (얼굴 표현 없음)
+    canvas.drawRRect(
+      RRect.fromLTRBR(45, 30, 55, 42, const Radius.circular(3)),
+      fill(_skin),
     );
-    part(
-      RRect.fromLTRBR(135.9, 138.4, 154.7, 145.9, const Radius.circular(4)),
-      Colors.white,
-    );
+    canvas.drawOval(const Rect.fromLTRB(38, 4, 62, 32), fill(_skin));
+    canvas.drawOval(const Rect.fromLTRB(38, 4, 62, 32), outline);
 
     canvas.restore();
   }
 
   @override
   bool shouldRepaint(_OutfitPainter old) =>
-      old.top != top || old.bottom != bottom || old.unknown != unknown;
+      old.top != top ||
+      old.bottom != bottom ||
+      old.shoe != shoe ||
+      old.unknown != unknown;
 }

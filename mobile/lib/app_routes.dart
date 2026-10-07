@@ -18,11 +18,11 @@ class AppRoutes {
 
   /// 수색 중이면 05 상세, 발견 완료면 07 발견 완료 상세
   static Future<void> detail(BuildContext context, MissingAlert alert) => _push(
-    context,
-    alert.isFound
-        ? FoundDetailScreen(alert: alert)
-        : AlertDetailScreen(alert: alert),
-  );
+        context,
+        alert.isFound
+            ? FoundDetailScreen(alert: alert)
+            : AlertDetailScreen(alert: alert),
+      );
 
   static Future<void> report(BuildContext context, MissingAlert alert) =>
       _push(context, ReportScreen(alert: alert));
