@@ -7,7 +7,7 @@ import 'app_button.dart';
 import 'outfit_figure.dart';
 import 'section_card.dart';
 import 'status_chip.dart';
-import 'tag_chip.dart';
+import 'swatch_tile.dart';
 
 /// 잠금화면 알림 카드의 공통 틀 (아이콘 · 보낸 곳 · 오른쪽 칩/시간).
 class _NotiShell extends StatelessWidget {
@@ -35,7 +35,7 @@ class _NotiShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(20);
+    final radius = BorderRadius.circular(18);
     return Material(
       color: background,
       shape: RoundedRectangleBorder(
@@ -55,8 +55,8 @@ class _NotiShell extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    width: 20,
-                    height: 20,
+                    width: 22,
+                    height: 22,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: iconColor,
@@ -141,10 +141,10 @@ class AlertNotiFolded extends StatelessWidget {
   Widget build(BuildContext context) {
     return _NotiShell(
       icon: '!',
-      iconColor: AppColors.purple,
+      iconColor: AppColors.navy,
       source: '실종경보 · ${alert.region}',
-      sourceColor: AppColors.purple,
-      borderColor: AppColors.purple,
+      sourceColor: AppColors.navy,
+      borderColor: AppColors.navy,
       trailing: const StatusChip.searching(),
       onTap: onTap,
       children: [
@@ -171,24 +171,36 @@ class AlertNotiExpanded extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget fact(String k, String v) => Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          k,
-          style: appText(11, weight: FontWeight.w500, color: AppColors.gray400),
-        ),
-        const SizedBox(height: 1),
-        Text(v, style: appText(13, weight: FontWeight.w700)),
-      ],
-    );
+    Widget fact(String k, String v) => Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.bg,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                k,
+                style: appText(
+                  11,
+                  weight: FontWeight.w500,
+                  color: AppColors.gray600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(v, style: appText(13, weight: FontWeight.w700, height: 1.4)),
+            ],
+          ),
+        );
 
     return _NotiShell(
       icon: '!',
-      iconColor: AppColors.purple,
+      iconColor: AppColors.navy,
       source: '실종경보 · ${alert.region}',
-      sourceColor: AppColors.purple,
-      borderColor: AppColors.purple,
+      sourceColor: AppColors.navy,
+      borderColor: AppColors.navy,
       trailing: const StatusChip.searching(),
       children: [
         _title('${alert.ageSex}을 찾습니다'),
@@ -196,7 +208,7 @@ class AlertNotiExpanded extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            OutfitThumb(alert: alert, width: 84, height: 104, radius: 12),
+            OutfitThumb(alert: alert, width: 84, height: 104, radius: 10),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -211,11 +223,43 @@ class AlertNotiExpanded extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        TagWrap(
-          children: [
-            TagChip('상의 ${alert.topText}'),
-            TagChip('하의·신발 ${alert.bottomText}'),
-          ],
+        Text(
+          '이것만 기억하세요',
+          style: appText(12, weight: FontWeight.w800, color: AppColors.navy),
+        ),
+        const SizedBox(height: 6),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: SwatchTile(
+                  label: '상의',
+                  text: alert.topText,
+                  size: 34,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: SwatchTile(
+                  label: '하의·신발',
+                  text: alert.bottomText,
+                  size: 34,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: SwatchTile(
+                  label: '키',
+                  text: alert.heightText,
+                  size: 34,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         Row(

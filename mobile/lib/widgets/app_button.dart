@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 
-/// 진한 보라(primary) 또는 흰색 테두리(outline) 버튼.
+/// 남색(primary) 또는 흰색에 검은 테두리(outline) 버튼.
 class AppButton extends StatelessWidget {
   const AppButton({
     super.key,
@@ -20,17 +20,17 @@ class AppButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(12);
+    final radius = BorderRadius.circular(8);
     return SizedBox(
-      height: large ? 52 : 44,
+      height: large ? 52 : 46,
       width: double.infinity,
       child: Material(
-        color: primary ? AppColors.purpleDeep : AppColors.white,
+        color: primary ? AppColors.navy : AppColors.white,
         shape: RoundedRectangleBorder(
           borderRadius: radius,
           side: primary
               ? BorderSide.none
-              : const BorderSide(color: AppColors.gray200),
+              : const BorderSide(color: AppColors.ink, width: 1.5),
         ),
         child: InkWell(
           borderRadius: radius,
@@ -39,9 +39,9 @@ class AppButton extends StatelessWidget {
             child: Text(
               label,
               style: appText(
-                large ? 16 : 14,
+                large ? 16 : 15,
                 weight: FontWeight.w700,
-                color: primary ? Colors.white : AppColors.gray900,
+                color: primary ? Colors.white : AppColors.ink,
               ),
             ),
           ),
@@ -51,7 +51,7 @@ class AppButton extends StatelessWidget {
   }
 }
 
-/// 화면 맨 아래에 붙는 흰색 버튼 영역.
+/// 화면 맨 아래 버튼 영역 (바탕색 + 위쪽 얇은 줄).
 class BottomActionBar extends StatelessWidget {
   const BottomActionBar({super.key, required this.child});
 
@@ -61,8 +61,8 @@ class BottomActionBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color: AppColors.white,
-        border: Border(top: BorderSide(color: AppColors.gray200)),
+        color: AppColors.bg,
+        border: Border(top: BorderSide(color: AppColors.line)),
       ),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       child: SafeArea(top: false, child: child),

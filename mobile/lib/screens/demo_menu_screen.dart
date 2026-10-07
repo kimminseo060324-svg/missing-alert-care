@@ -59,17 +59,20 @@ class DemoMenuScreen extends StatelessWidget {
               final (no, name, onTap) = items[i];
               return Material(
                 color: AppColors.white,
-                borderRadius: BorderRadius.circular(16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: const BorderSide(color: AppColors.border),
+                ),
                 child: ListTile(
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   leading: Text(
                     no,
                     style: appText(
                       15,
                       weight: FontWeight.w800,
-                      color: AppColors.purple,
+                      color: AppColors.navy,
                     ),
                   ),
                   title: Text(

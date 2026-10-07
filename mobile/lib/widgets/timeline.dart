@@ -8,10 +8,10 @@ class TimelineEntry {
 
   final String time;
   final String text;
-  final bool done; // 발견 완료 줄은 초록 점
+  final bool done; // 발견 완료 줄은 초록 글씨
 }
 
-/// "경보 진행 기록" 목록.
+/// "진행 기록" 목록. 줄 사이에 얇은 선.
 class Timeline extends StatelessWidget {
   const Timeline({super.key, required this.entries});
 
@@ -21,32 +21,43 @@ class Timeline extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        for (final (i, e) in entries.indexed) ...[
-          if (i > 0) const SizedBox(height: 10),
-          Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: e.done ? AppColors.green : AppColors.purple,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 10),
-              SizedBox(
-                width: 48,
-                child: Text(
-                  e.time,
-                  style: appText(13, color: AppColors.gray600).copyWith(
-                    fontFeatures: const [FontFeature.tabularFigures()],
+        for (final (i, e) in entries.indexed)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              border: i == entries.length - 1
+                  ? null
+                  : const Border(bottom: BorderSide(color: AppColors.line)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 52,
+                  child: Text(
+                    e.time,
+                    style: appText(
+                      14,
+                      weight: FontWeight.w700,
+                      color: e.done ? AppColors.green : AppColors.ink,
+                    ).copyWith(
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
                   ),
                 ),
-              ),
-              Expanded(child: Text(e.text, style: appText(13))),
-            ],
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    e.text,
+                    style: appText(
+                      14,
+                      color: e.done ? AppColors.green : AppColors.ink,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
       ],
     );
   }

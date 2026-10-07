@@ -6,6 +6,7 @@ import '../models/missing_alert.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../widgets/alert_list_item.dart';
+import '../widgets/hero_header.dart';
 import '../widgets/section_card.dart';
 
 enum _Filter { all, searching, found }
@@ -28,53 +29,109 @@ class _AlertListScreenState extends State<AlertListScreen> {
       future: AlertRepository.instance.loadAll(),
       builder: (context, snap) {
         final all = snap.data ?? const <MissingAlert>[];
-        final searchingCount = all.where((a) => !a.isFound).length;
+        final searching = all.where((a) => !a.isFound).toList();
+        final regions = searching.map((a) => a.region).toSet().take(2);
         final shown = switch (_filter) {
           _Filter.all => all,
-          _Filter.searching => all.where((a) => !a.isFound).toList(),
+          _Filter.searching => searching,
           _Filter.found => all.where((a) => a.isFound).toList(),
         };
 
         return Scaffold(
-          appBar: AppBar(
-            title: const Text('내 주변 실종경보'),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: Center(
-                  child: Text(
-                    '수색 중 $searchingCount건',
-                    style: appText(12, color: AppColors.gray600),
-                  ),
+          body: Column(
+            children: [
+              ScreenHeader(
+                title: '내 주변 실종경보',
+                centerTitle: false,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: '수색 중 ',
+                              style: appText(
+                                13,
+                                color: Colors.white.withValues(alpha: 0.8),
+                              ),
+                            ),
+                            TextSpan(
+                              text: '${searching.length}',
+                              style: appText(
+                                40,
+                                weight: FontWeight.w900,
+                                color: Colors.white,
+                                height: 1,
+                              ),
+                            ),
+                            TextSpan(
+                              text: '건',
+                              style: appText(
+                                16,
+                                weight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (regions.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                        child: Text(
+                          regions.join(' · '),
+                          style: appText(
+                            13,
+                            weight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
+              ),
+              Expanded(
+                child: !snap.hasData
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                        children: [
+                          Row(
+                            children: [
+                              _chip('전체', _Filter.all),
+                              const SizedBox(width: 6),
+                              _chip('수색 중', _Filter.searching),
+                              const SizedBox(width: 6),
+                              _chip('발견 완료', _Filter.found),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          for (final (i, a) in shown.indexed) ...[
+                            AlertListItem(
+                              alert: a,
+                              number: i + 1,
+                              selected: _filter == _Filter.all && i == 0,
+                              onTap: () => AppRoutes.detail(context, a),
+                            ),
+                            const SizedBox(height: 10),
+                          ],
+                          const SizedBox(height: 4),
+                          const SourceText(),
+                        ],
+                      ),
               ),
             ],
           ),
-          body: !snap.hasData
-              ? const Center(child: CircularProgressIndicator())
-              : ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                  children: [
-                    Row(
-                      children: [
-                        _chip('전체', _Filter.all),
-                        const SizedBox(width: 8),
-                        _chip('수색 중', _Filter.searching),
-                        const SizedBox(width: 8),
-                        _chip('발견 완료', _Filter.found),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    for (final a in shown) ...[
-                      AlertListItem(
-                        alert: a,
-                        onTap: () => AppRoutes.detail(context, a),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    const SourceText(),
-                  ],
-                ),
         );
       },
     );
@@ -85,12 +142,11 @@ class _AlertListScreenState extends State<AlertListScreen> {
     return GestureDetector(
       onTap: () => setState(() => _filter = value),
       child: Container(
-        height: 34,
+        height: 36,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
-          color: on ? AppColors.gray900 : AppColors.white,
-          borderRadius: BorderRadius.circular(17),
-          border: Border.all(color: on ? AppColors.gray900 : AppColors.gray200),
+          color: on ? AppColors.navy : AppColors.white,
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Center(
           widthFactor: 1,
@@ -99,7 +155,7 @@ class _AlertListScreenState extends State<AlertListScreen> {
             style: appText(
               13,
               weight: FontWeight.w700,
-              color: on ? Colors.white : AppColors.gray900,
+              color: on ? Colors.white : AppColors.gray600,
             ),
           ),
         ),

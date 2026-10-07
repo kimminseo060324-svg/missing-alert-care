@@ -13,11 +13,11 @@ enum LockMode { folded, expanded, found }
 /// 진짜 푸시 알림이 붙기 전까지 시연용으로 잠금화면을 흉내 내요.
 class LockScreen extends StatefulWidget {
   const LockScreen.folded({super.key, required this.alert})
-    : mode = LockMode.folded;
+      : mode = LockMode.folded;
   const LockScreen.expanded({super.key, required this.alert})
-    : mode = LockMode.expanded;
+      : mode = LockMode.expanded;
   const LockScreen.found({super.key, required this.alert})
-    : mode = LockMode.found;
+      : mode = LockMode.found;
 
   final MissingAlert alert;
   final LockMode mode;
@@ -48,33 +48,41 @@ class _LockScreenState extends State<LockScreen> {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
-        backgroundColor: AppColors.lock,
-        body: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white54),
-                  tooltip: '닫기',
-                  onPressed: () => Navigator.of(context).pop(),
+        body: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [AppColors.lockTop, AppColors.lockBottom],
+            ),
+          ),
+          child: SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white54),
+                    tooltip: '닫기',
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
                 ),
-              ),
-              Text(
-                clock,
-                textAlign: TextAlign.center,
-                style: appText(64, color: Colors.white, height: 1),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                date,
-                textAlign: TextAlign.center,
-                style: appText(14, color: Colors.white70),
-              ),
-              const SizedBox(height: 24),
-              ..._cards(alert),
-            ],
+                Text(
+                  clock,
+                  textAlign: TextAlign.center,
+                  style: appText(64, color: Colors.white, height: 1),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  date,
+                  textAlign: TextAlign.center,
+                  style: appText(14, color: Colors.white70),
+                ),
+                const SizedBox(height: 24),
+                ..._cards(alert),
+              ],
+            ),
           ),
         ),
       ),

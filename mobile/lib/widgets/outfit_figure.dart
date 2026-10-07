@@ -81,7 +81,7 @@ class OutfitThumb extends StatelessWidget {
       height: height,
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: hidden ? AppColors.photoBg : AppColors.outfitBg,
+        color: AppColors.bg,
         borderRadius: BorderRadius.circular(radius),
       ),
       child: hidden ? null : OutfitFigure(alert: alert),
@@ -100,7 +100,7 @@ class OutfitPanel extends StatelessWidget {
     return Container(
       height: 190,
       decoration: BoxDecoration(
-        color: AppColors.outfitBg,
+        color: AppColors.bg,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Stack(
@@ -116,7 +116,7 @@ class OutfitPanel extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.8),
+                color: Colors.white.withValues(alpha: 0.9),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
@@ -124,7 +124,7 @@ class OutfitPanel extends StatelessWidget {
                 style: appText(
                   11,
                   weight: FontWeight.w700,
-                  color: AppColors.purple,
+                  color: AppColors.navy,
                 ),
               ),
             ),
@@ -165,7 +165,7 @@ class _OutfitPainter extends CustomPainter {
       ..color = const Color(0x33000000)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
-    Paint fill(Color c) => Paint()..color = unknown ? AppColors.gray200 : c;
+    Paint fill(Color c) => Paint()..color = unknown ? AppColors.line : c;
 
     void part(RRect r, Color c) {
       canvas.drawRRect(r, fill(c));

@@ -20,73 +20,90 @@ class FoundDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('실종경보 상세')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      body: Column(
         children: [
-          HeroHeader(
+          ScreenHeader(
+            title: '실종경보 상세',
             found: true,
-            label: '실종경보 종료 · ${alert.region}',
-            chip: StatusChip.found(alert.foundTime, tone: ChipTone.onColor),
-            title: alert.ageSex,
-            meta: '${alert.occrDateText} 발생 · ${alert.foundTime} 종료',
+            child: HeroInfo(
+              chip: StatusChip.found(alert.foundTime, tone: ChipTone.onColor),
+              title: alert.ageSex,
+              meta:
+                  '${alert.region}  ·  ${alert.occrDateText} 발령  ·  ${alert.foundTime} 종료',
+            ),
           ),
-          const SizedBox(height: 12),
-          SectionCard(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    alignment: Alignment.center,
-                    decoration: const BoxDecoration(
-                      color: AppColors.green,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Text(
-                      '✓',
-                      style: appText(
-                        28,
-                        weight: FontWeight.w800,
-                        color: Colors.white,
+                  SectionCard(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Center(
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 60,
+                              height: 60,
+                              alignment: Alignment.center,
+                              decoration: const BoxDecoration(
+                                color: AppColors.green,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.check_rounded,
+                                color: Colors.white,
+                                size: 34,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              '안전하게 발견됐어요',
+                              style: appText(20, weight: FontWeight.w800),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '사진과 상세 정보는\n개인정보 보호를 위해 삭제했어요.',
+                              textAlign: TextAlign.center,
+                              style: appText(
+                                13,
+                                color: AppColors.gray600,
+                                height: 1.6,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 12),
+                  SectionCard(
+                    title: '진행 기록',
+                    child: Timeline(
+                      entries: [
+                        TimelineEntry(alert.occrDateShort, '실종경보 발령'),
+                        TimelineEntry(
+                          alert.foundTime,
+                          '발견 완료 · 경보 종료',
+                          done: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   Text(
-                    '안전하게 발견됐어요',
-                    style: appText(18, weight: FontWeight.w800),
+                    '관심 가져 주셔서 고마워요.',
+                    textAlign: TextAlign.center,
+                    style: appText(12, color: AppColors.gray400),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    '사진과 상세 정보는\n개인정보 보호를 위해 삭제했어요.',
-                    textAlign: TextAlign.center,
-                    style: appText(13, color: AppColors.gray600, height: 1.5),
-                  ),
+                  const SourceText(center: true),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          SectionCard(
-            title: '경보 진행 기록',
-            child: Timeline(
-              entries: [
-                TimelineEntry(alert.occrDateShort, '실종경보 발령'),
-                TimelineEntry(alert.foundTime, '발견 완료 · 경보 종료', done: true),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '관심 가져 주셔서 고마워요.',
-            textAlign: TextAlign.center,
-            style: appText(13, color: AppColors.gray600),
-          ),
-          const SizedBox(height: 8),
-          const SourceText(center: true),
         ],
       ),
       bottomNavigationBar: BottomActionBar(

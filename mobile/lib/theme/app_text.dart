@@ -6,7 +6,7 @@ import 'app_colors.dart';
 TextStyle appText(
   double size, {
   FontWeight weight = FontWeight.w400,
-  Color color = AppColors.gray900,
+  Color color = AppColors.ink,
   double? height,
 }) {
   return TextStyle(
