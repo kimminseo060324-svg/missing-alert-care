@@ -1,23 +1,23 @@
-"""행안부 긴급재난문자 API(재난안전데이터공유플랫폼 DSSP-IF-00247) 확인용 스크립트.
+"""행안부 긴급재난문자 API(재난안전데이터공유플랫폼 DSSP-IF-00247) 수동 확인 스크립트. (pytest 테스트 아님)
 
 문자 원문에는 실제 실종자 정보가 있으므로 원문은 출력·저장하지 않고 건수와 구조만 출력한다.
-실행: python backend/test_disaster_msg_api.py [조회일수, 기본 7]
+실행 (저장소 폴더에서):
+    python backend/scripts/check_disaster_msg_api.py [조회일수, 기본 7]
+    python backend/scripts/check_disaster_msg_api.py 30 --region 지역이름 --date YYYY-MM-DD [HH]
 """
 import os
 import re
-import sys
 import math
 import time
+import argparse
 import datetime
 from collections import Counter
-from pathlib import Path
 
 import requests
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 
 URL = "https://www.safetydata.go.kr/V2/api/DSSP-IF-00247"
 MAX_ROWS = 1000  # 이 API가 한 번에 주는 최대 건수 (5000 요청해도 1000건)
-DAYS = int(sys.argv[1]) if len(sys.argv) > 1 else 7
 RETRIES = 3      # 빈 본문일 때 같은 페이지를 다시 요청하는 횟수
 RETRY_WAIT = 2   # 다시 요청하기 전 대기(초)
 
@@ -25,8 +25,9 @@ MISSING_WORDS = ["실종", "찾습니다", "배회"]
 CLOTHES = ["남방", "점퍼", "잠바", "자켓", "재킷", "패딩", "조끼", "셔츠", "상의", "하의", "바지",
            "청바지", "치마", "원피스", "슬리퍼", "운동화", "신발", "구두", "모자", "가방", "후드", "등산복"]
 COLORS = ["청색", "검정", "검은", "흰색", "흰", "회색", "빨간", "빨강", "파란", "파랑", "노란", "노랑",
-          "초록", "녹색", "남색", "곤색", "갈색", "베이지", "분홍", "보라", "주황", "카키", "하늘색", "곤색"]
+          "초록", "녹색", "남색", "곤색", "갈색", "베이지", "분홍", "보라", "주황", "카키", "하늘색"]
 AGE = re.compile(r"(\d{1,3})\s*세")
+DATE_ARG = re.compile(r"\d{4}-\d{2}-\d{2}( \d{2})?")
 
 
 def fetch_page(key, start, page):
@@ -72,13 +73,25 @@ def age_group(text):
     return "아동(18세 미만)" if age < 18 else "노인(65세 이상)" if age >= 65 else "성인(18~64세)"
 
 
+def parse_args():
+    p = argparse.ArgumentParser(description="긴급재난문자 API 건수·구조 확인 (원문은 출력하지 않음)")
+    p.add_argument("days", nargs="?", type=int, default=7, help="최근 며칠을 조회할지 (기본 7)")
+    p.add_argument("--region", help="4절: 수신지역 이름에 이 글자가 들어간 문자만 (예: 시군구 이름)")
+    p.add_argument("--date", help="4절: 이 날짜(YYYY-MM-DD) 또는 날짜·시(YYYY-MM-DD HH)의 문자만")
+    args = p.parse_args()
+    if args.date and not DATE_ARG.fullmatch(args.date):
+        p.error("--date는 YYYY-MM-DD 또는 'YYYY-MM-DD HH' 형식이어야 합니다")
+    return args
+
+
 def main():
-    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+    args = parse_args()
+    load_dotenv(find_dotenv(usecwd=True))  # 실행 위치에서 위로 올라가며 .env를 찾는다
     key = os.getenv("DISASTER_MSG_API_KEY")
-    assert key, ".env에 DISASTER_MSG_API_KEY 없음"
+    assert key, ".env에 DISASTER_MSG_API_KEY 없음 (저장소 폴더에서 실행했는지 확인)"
 
     today = datetime.date.today()
-    start = today - datetime.timedelta(days=DAYS - 1)
+    start = today - datetime.timedelta(days=args.days - 1)
     rows, headers = fetch_since(key, start.strftime("%Y%m%d"))
     # crtDt는 '이후' 필터라 기간 밖 데이터가 섞일 수 있어 한 번 더 거른다
     lo = start.strftime("%Y/%m/%d")
@@ -86,9 +99,12 @@ def main():
 
     print("== 1. 응답 구조")
     print("필드:", sorted(rows[0].keys()) if rows else "(데이터 없음)")
-    print("호출 제한 관련 응답 헤더:", {k: v for k, v in headers.items() if "limit" in k.lower() or "quota" in k.lower()} or "없음")
 
-    print(f"\n== 3. 최근 {DAYS}일({lo} ~ {today:%Y/%m/%d}) 건수")
+    print("\n== 2. 호출 제한·한 번에 받는 최대 건수")
+    print("호출 제한 관련 응답 헤더:", {k: v for k, v in headers.items() if "limit" in k.lower() or "quota" in k.lower()} or "없음")
+    print("한 번에 받는 최대 건수:", MAX_ROWS)
+
+    print(f"\n== 3. 최근 {args.days}일({lo} ~ {today:%Y/%m/%d}) 건수")
     print("전체 문자:", len(rows), "| 고유 문구:", len({x["MSG_CN"] for x in rows}))
     for w in MISSING_WORDS:
         print(f"  '{w}' 포함:", sum(w in x["MSG_CN"] for x in rows))
@@ -97,10 +113,15 @@ def main():
     print("  셋 중 하나라도 포함(실종 문자):", len(missing), "| 고유 문구:", len(uniq))
     print("  실종 문자의 재난구분:", dict(Counter(x["DST_SE_NM"] for x in missing)))
 
-    print("\n== 4. 2026-10-03 21시대 해남군 실종 문자")
-    haenam = [x for x in rows if "해남" in x["RCPTN_RGN_NM"] and x["CRT_DT"].startswith("2026/10/03 21")]
-    print("해남군 10/03 21시대 문자 전체:", len(haenam), "건 | 그중 실종 문자:",
-          "있다" if any(has_any(x["MSG_CN"], MISSING_WORDS) for x in haenam) else "없다")
+    print("\n== 4. 지정한 지역·날짜의 실종 문자")
+    if not (args.region or args.date):
+        print("(건너뜀: --region 또는 --date를 주면 확인)")
+    else:
+        prefix = args.date.replace("-", "/") if args.date else ""
+        if prefix and prefix[:10] < lo:
+            print(f"[경고] --date가 조회 기간({lo}~) 밖입니다. 조회일수를 늘려 주세요.")
+        sel = [x for x in rows if (not args.region or args.region in x["RCPTN_RGN_NM"]) and x["CRT_DT"].startswith(prefix)]
+        print("해당 문자:", len(sel), "건 | 그중 실종 문자:", sum(has_any(x["MSG_CN"], MISSING_WORDS) for x in sel), "건")
 
     print("\n== 5. 실종 문자(고유 문구 기준) 옷·색깔 표현 비율")
     n = len(uniq) or 1
