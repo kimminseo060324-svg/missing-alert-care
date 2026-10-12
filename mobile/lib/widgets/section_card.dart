@@ -118,10 +118,21 @@ class SourceText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text,
-      textAlign: center ? TextAlign.center : TextAlign.start,
-      style: appText(11, color: AppColors.gray400),
+    return Column(
+      crossAxisAlignment:
+          center ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+      children: [
+        Text(
+          text,
+          textAlign: center ? TextAlign.center : TextAlign.start,
+          style: appText(11, color: AppColors.gray400),
+        ),
+        Text(
+          '시연용 가상 데이터예요',
+          textAlign: center ? TextAlign.center : TextAlign.start,
+          style: appText(11, color: AppColors.gray400),
+        ),
+      ],
     );
   }
 }
