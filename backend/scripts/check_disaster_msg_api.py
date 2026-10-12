@@ -21,7 +21,8 @@ from dotenv import load_dotenv
 ENV_PATH = Path(__file__).resolve().parents[2] / ".env"  # 저장소 루트의 .env만 읽는다
 URL = "https://www.safetydata.go.kr/V2/api/DSSP-IF-00247"
 ROW_FIELDS = {"SN", "CRT_DT", "MSG_CN", "RCPTN_RGN_NM", "DST_SE_NM"}  # 이 스크립트가 쓰는 필드
-STR_FIELDS = ("CRT_DT", "MSG_CN", "RCPTN_RGN_NM")  # 글자로 자르거나 검색하므로 문자열이어야 하는 필드
+# 글자로 자르거나 검색하거나(CRT_DT, MSG_CN, RCPTN_RGN_NM) 개수를 세므로(DST_SE_NM) 문자열이어야 하는 필드
+STR_FIELDS = ("CRT_DT", "MSG_CN", "RCPTN_RGN_NM", "DST_SE_NM")
 MAX_ROWS = 1000  # 이 API가 한 번에 주는 최대 건수 (5000 요청해도 1000건)
 RETRIES = 3      # 빈 본문일 때 같은 페이지를 다시 요청하는 횟수
 RETRY_WAIT = 2   # 다시 요청하기 전 대기(초)
@@ -84,8 +85,9 @@ def fetch_page(key, start, page):
         if attempt:
             time.sleep(RETRY_WAIT)
         j, headers = request_page(key, start, page)
-        if j.get("body"):
-            return j["body"], j["totalCount"], headers
+        # 본문이 있거나, 전체가 0건이라 비어 있는 게 정상이면 다시 요청하지 않는다
+        if j.get("body") or j["totalCount"] == 0:
+            return j.get("body") or [], j["totalCount"], headers
     return [], j["totalCount"], headers
 
 
