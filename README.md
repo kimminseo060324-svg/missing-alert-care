@@ -105,7 +105,7 @@ https://www.data.go.kr/data/15134001/openapi.do
 
 ### Mobile
 
-- Flutter
+- Flutter 3.32 이상 (Dart 3.8 이상)
 - Dart
 
 ### Backend
@@ -148,7 +148,7 @@ missing-alert-care/
 
 ```
 missing-alert-care/
-├── mobile/         # (예정) Flutter 앱
+├── mobile/         # Flutter 앱
 ├── backend/        # (예정) FastAPI 서버
 └── sample-data/    # (예정) 개발·시연용 가상 실종경보 데이터
 ```

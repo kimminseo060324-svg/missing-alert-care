@@ -73,7 +73,7 @@ class SectionTitle extends StatelessWidget {
               style: appText(14, weight: FontWeight.w700, color: color),
             ),
           ),
-          if (trailing != null) trailing!,
+          ?trailing,
         ],
       ),
     );
