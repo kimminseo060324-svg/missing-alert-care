@@ -1,11 +1,14 @@
 """가상 실종경보 데이터 읽기.
 
-나중에 실제 안전Dream API로 바꿀 때는 load_alerts()와 같은 모양(원본 목록, 안내 문구)을
-돌려주는 모듈을 만들고 routers/alerts.py의 import만 바꾸면 된다.
+나중에 실제 안전Dream API로 바꿀 때는 SOURCE, IS_SAMPLE과 load_alerts()(원본 목록, 안내 문구)를
+같은 모양으로 갖춘 모듈을 만들고 routers/alerts.py의 import만 바꾸면 된다.
+(실제 모듈은 SOURCE = "자료 출처: 경찰청", IS_SAMPLE = False)
 """
 import json
 from pathlib import Path
 
+SOURCE = "시연용 가상 데이터"  # 응답의 source 필드
+IS_SAMPLE = True               # 응답의 is_sample 필드
 SAMPLE_PATH = Path(__file__).resolve().parents[2] / "sample-data" / "missing-alerts.json"
 
 

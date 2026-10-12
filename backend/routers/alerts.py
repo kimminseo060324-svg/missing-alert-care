@@ -1,6 +1,7 @@
 """실종경보 API와 시연용 API.
 
-원본 필드는 그대로 두고 status, found_at, issued_at, target_label, photo_url, source만 덧붙인다.
+원본 필드는 그대로 두고 status, found_at, issued_at, target_label, photo_url, source, is_sample만 덧붙인다.
+source와 is_sample은 데이터를 읽어 온 모듈(source)이 정한다.
 시연용 상태(발령·발견)는 메모리에만 있어서 서버를 다시 켜면 처음 상태로 돌아간다.
 """
 from datetime import datetime, timedelta, timezone
@@ -49,7 +50,8 @@ def _enrich(raw):
         "found_at": st["found_at"].isoformat() if st.get("found_at") else None,
         "target_label": TARGET_LABELS.get(raw.get("writngTrgetDscd"), "기타"),
         "photo_url": None,
-        "source": "자료 출처: 경찰청",
+        "source": source.SOURCE,
+        "is_sample": source.IS_SAMPLE,
     }
 
 
@@ -83,7 +85,7 @@ def list_alerts(
             continue
         items.append(item)
     items.sort(key=lambda x: x["issued_at"], reverse=True)
-    return {"notice": notice, "totalCount": len(items), "list": items}
+    return {"notice": notice, "is_sample": source.IS_SAMPLE, "totalCount": len(items), "list": items}
 
 
 @router.get("/alerts/{sid}", tags=["alerts"], summary="경보 상세")
