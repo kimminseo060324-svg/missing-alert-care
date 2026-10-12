@@ -1,7 +1,8 @@
 """행안부 긴급재난문자 API(재난안전데이터공유플랫폼 DSSP-IF-00247) 수동 확인 스크립트. (pytest 테스트 아님)
 
 문자 원문에는 실제 실종자 정보가 있으므로 원문은 출력·저장하지 않고 건수와 구조만 출력한다.
-실행 (저장소 폴더에서):
+오류가 나도 API 키, 키가 들어간 요청 URL, 응답 본문은 출력하지 않는다.
+실행:
     python backend/scripts/check_disaster_msg_api.py [조회일수, 기본 7]
     python backend/scripts/check_disaster_msg_api.py 30 --region 지역이름 --date YYYY-MM-DD [HH]
 """
@@ -12,11 +13,14 @@ import time
 import argparse
 import datetime
 from collections import Counter
+from pathlib import Path
 
 import requests
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv
 
+ENV_PATH = Path(__file__).resolve().parents[2] / ".env"  # 저장소 루트의 .env만 읽는다
 URL = "https://www.safetydata.go.kr/V2/api/DSSP-IF-00247"
+ROW_FIELDS = {"CRT_DT", "MSG_CN", "RCPTN_RGN_NM", "DST_SE_NM"}  # 이 스크립트가 쓰는 필드
 MAX_ROWS = 1000  # 이 API가 한 번에 주는 최대 건수 (5000 요청해도 1000건)
 RETRIES = 3      # 빈 본문일 때 같은 페이지를 다시 요청하는 횟수
 RETRY_WAIT = 2   # 다시 요청하기 전 대기(초)
@@ -30,19 +34,51 @@ AGE = re.compile(r"(\d{1,3})\s*세")
 DATE_ARG = re.compile(r"\d{4}-\d{2}-\d{2}( \d{2})?")
 
 
+def fail(msg):
+    """키·URL·응답 본문 없이 안내 문구만 남기고 끝낸다."""
+    raise SystemExit(f"[오류] {msg}")
+
+
+def request_page(key, start, page):
+    """한 페이지를 요청해 검사한 응답(JSON)을 돌려준다. 이상하면 알기 쉬운 문구로 끝낸다."""
+    try:
+        r = requests.get(URL, params={"serviceKey": key, "returnType": "json", "crtDt": start,
+                                      "pageNo": page, "numOfRows": MAX_ROWS}, timeout=60)
+    except requests.RequestException:
+        # 예외 메시지에 serviceKey가 들어간 URL이 담길 수 있어 예외를 출력하지 않는다
+        fail("재난문자 API 요청에 실패했습니다. 네트워크와 API 키를 확인해주세요.")
+    if r.status_code != 200:
+        fail(f"재난문자 API가 HTTP {r.status_code} 오류를 돌려줬습니다.")
+    try:
+        j = r.json()
+    except ValueError:
+        fail(f"재난문자 API 응답이 JSON이 아닙니다. (HTTP {r.status_code}, content-type: {r.headers.get('content-type', '없음')})")
+
+    header = j.get("header") if isinstance(j, dict) else None
+    if not isinstance(header, dict) or "resultCode" not in header:
+        fail("재난문자 API 응답에 header.resultCode가 없습니다. 응답 형식이 바뀌었는지 확인해주세요.")
+    if header["resultCode"] != "00":
+        fail(f"재난문자 API가 오류 코드 {header['resultCode']}를 돌려줬습니다. API 키와 요청 값을 확인해주세요.")
+    if not isinstance(j.get("totalCount"), int):
+        fail("재난문자 API 응답에 totalCount(숫자)가 없습니다. 응답 형식이 바뀌었는지 확인해주세요.")
+    body = j.get("body")
+    if body is not None and not (isinstance(body, list) and all(isinstance(x, dict) for x in body)):
+        fail("재난문자 API 응답의 body가 목록 형식이 아닙니다. 응답 형식이 바뀌었는지 확인해주세요.")
+    missing = sorted({f for x in body or [] for f in ROW_FIELDS if f not in x})
+    if missing:
+        fail(f"재난문자 API 응답에 필요한 필드가 없습니다: {', '.join(missing)}")
+    return j, r.headers
+
+
 def fetch_page(key, start, page):
     """한 페이지 요청. 이 API는 가끔 정상 코드(00)와 함께 빈 본문을 주므로 몇 번 다시 요청한다."""
     for attempt in range(RETRIES + 1):
         if attempt:
             time.sleep(RETRY_WAIT)
-        r = requests.get(URL, params={"serviceKey": key, "returnType": "json", "crtDt": start,
-                                      "pageNo": page, "numOfRows": MAX_ROWS}, timeout=60)
-        j = r.json()
-        if j["header"]["resultCode"] != "00":
-            raise RuntimeError(f"API 오류 {j['header']}")
+        j, headers = request_page(key, start, page)
         if j.get("body"):
-            return j["body"], j["totalCount"], r.headers
-    return [], j["totalCount"], r.headers
+            return j["body"], j["totalCount"], headers
+    return [], j["totalCount"], headers
 
 
 def fetch_since(key, start):
@@ -79,6 +115,8 @@ def parse_args():
     p.add_argument("--region", help="4절: 수신지역 이름에 이 글자가 들어간 문자만 (예: 시군구 이름)")
     p.add_argument("--date", help="4절: 이 날짜(YYYY-MM-DD) 또는 날짜·시(YYYY-MM-DD HH)의 문자만")
     args = p.parse_args()
+    if args.days < 1:
+        p.error("조회일수(days)는 1 이상이어야 합니다")
     if args.date and not DATE_ARG.fullmatch(args.date):
         p.error("--date는 YYYY-MM-DD 또는 'YYYY-MM-DD HH' 형식이어야 합니다")
     return args
@@ -86,9 +124,10 @@ def parse_args():
 
 def main():
     args = parse_args()
-    load_dotenv(find_dotenv(usecwd=True))  # 실행 위치에서 위로 올라가며 .env를 찾는다
+    load_dotenv(ENV_PATH)
     key = os.getenv("DISASTER_MSG_API_KEY")
-    assert key, ".env에 DISASTER_MSG_API_KEY 없음 (저장소 폴더에서 실행했는지 확인)"
+    if not key:
+        raise SystemExit("[오류] DISASTER_MSG_API_KEY가 없습니다. 저장소 루트의 .env에 키를 넣어주세요.")
 
     today = datetime.date.today()
     start = today - datetime.timedelta(days=args.days - 1)
