@@ -20,7 +20,8 @@ from dotenv import load_dotenv
 
 ENV_PATH = Path(__file__).resolve().parents[2] / ".env"  # 저장소 루트의 .env만 읽는다
 URL = "https://www.safetydata.go.kr/V2/api/DSSP-IF-00247"
-ROW_FIELDS = {"CRT_DT", "MSG_CN", "RCPTN_RGN_NM", "DST_SE_NM"}  # 이 스크립트가 쓰는 필드
+ROW_FIELDS = {"SN", "CRT_DT", "MSG_CN", "RCPTN_RGN_NM", "DST_SE_NM"}  # 이 스크립트가 쓰는 필드
+STR_FIELDS = ("CRT_DT", "MSG_CN", "RCPTN_RGN_NM")  # 글자로 자르거나 검색하므로 문자열이어야 하는 필드
 MAX_ROWS = 1000  # 이 API가 한 번에 주는 최대 건수 (5000 요청해도 1000건)
 RETRIES = 3      # 빈 본문일 때 같은 페이지를 다시 요청하는 횟수
 RETRY_WAIT = 2   # 다시 요청하기 전 대기(초)
@@ -67,6 +68,13 @@ def request_page(key, start, page):
     missing = sorted({f for x in body or [] for f in ROW_FIELDS if f not in x})
     if missing:
         fail(f"재난문자 API 응답에 필요한 필드가 없습니다: {', '.join(missing)}")
+    # 값은 출력하지 않고 필드 이름과 건수만 알린다
+    bad = Counter(f for x in body or [] for f in STR_FIELDS if not isinstance(x[f], str))
+    if bad:
+        fail("재난문자 API 응답에 문자열이 아니거나 비어 있는(null) 값이 있습니다: "
+             + ", ".join(f"{f} {n}건" for f, n in sorted(bad.items())))
+    if any(x["SN"] is None or isinstance(x["SN"], (dict, list)) for x in body or []):
+        fail("재난문자 API 응답에 일련번호(SN)가 비어 있거나 형식이 맞지 않는 문자가 있습니다.")
     return j, r.headers
 
 
@@ -92,6 +100,13 @@ def fetch_since(key, start):
             print(f"[경고] {page}쪽이 {RETRIES}번 다시 요청해도 비어 있어 건너뜀")
         rows += body
         page += 1
+    # 페이지를 받는 사이 새 문자가 들어오면 같은 문자가 두 쪽에 걸쳐 올 수 있어 SN 기준으로 하나만 남긴다
+    unique = {}
+    for x in rows:
+        unique.setdefault(x["SN"], x)  # 처음 받은 것을 남기고 순서 유지
+    if len(unique) != len(rows):
+        print(f"[경고] 일련번호(SN)가 같은 중복 문자 {len(rows) - len(unique)}건을 제외했습니다")
+    rows = list(unique.values())
     if len(rows) != total:
         print(f"[경고] 받은 건수 {len(rows)} ≠ totalCount {total} (빈 쪽: {empty or '없음'})")
     return rows, headers
