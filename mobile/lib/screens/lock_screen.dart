@@ -111,6 +111,7 @@ class _LockScreenState extends State<LockScreen> {
             alert: alert,
             onDetail: () => AppRoutes.detail(context, alert),
             onReport: () => AppRoutes.report(context, alert),
+            onTap: () => setState(() => _mode = LockMode.folded),
           ),
         ];
       case LockMode.found:

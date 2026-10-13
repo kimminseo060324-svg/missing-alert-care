@@ -163,11 +163,15 @@ class AlertNotiExpanded extends StatelessWidget {
     required this.alert,
     required this.onDetail,
     required this.onReport,
+    this.onTap,
   });
 
   final MissingAlert alert;
   final VoidCallback onDetail;
   final VoidCallback onReport;
+
+  /// 카드(버튼 말고 빈 곳)를 누르면 다시 접혀요.
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -202,6 +206,7 @@ class AlertNotiExpanded extends StatelessWidget {
       sourceColor: AppColors.navy,
       borderColor: AppColors.navy,
       trailing: const StatusChip.searching(),
+      onTap: onTap,
       children: [
         _title('${alert.ageSex}을 찾습니다'),
         const SizedBox(height: 12),

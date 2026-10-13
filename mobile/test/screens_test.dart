@@ -54,6 +54,18 @@ void main() {
     expect(find.text('상세보기'), findsOneWidget);
   });
 
+  testWidgets('02 펼친 알림을 한 번 더 누르면 다시 접혀요', (tester) async {
+    await tester.pumpWidget(_wrap(LockScreen.folded(alert: searching)));
+    await tester.tap(find.text('82세 남성을 찾습니다'));
+    await tester.pump();
+    expect(find.text('상세보기'), findsOneWidget);
+
+    await tester.tap(find.text('82세 남성을 찾습니다'));
+    await tester.pump();
+    expect(find.text('상세보기'), findsNothing);
+    expect(find.text('단수 예정 안내'), findsOneWidget);
+  });
+
   testWidgets('03 발견 완료 알림', (tester) async {
     await tester.pumpWidget(_wrap(LockScreen.found(alert: found)));
     expect(find.textContaining('안전하게 발견됐어요'), findsOneWidget);
