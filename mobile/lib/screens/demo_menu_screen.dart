@@ -6,6 +6,7 @@ import '../models/missing_alert.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../widgets/load_state_view.dart';
+import '../widgets/loading_view.dart';
 import 'lock_screen.dart';
 
 /// 시연용 첫 화면. 피그마 화면 01~07로 바로 갈 수 있어요.
@@ -37,9 +38,13 @@ class _DemoMenuScreenState extends State<DemoMenuScreen> {
       body: FutureBuilder<List<MissingAlert>>(
         future: _future,
         builder: (context, snap) {
+          // "다시 시도"를 누르면 이전 실패가 남아 있어도 먼저 로딩을 보여 줘요.
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const LoadingView();
+          }
           if (snap.hasError) return LoadErrorView(onRetry: _retry);
           if (!snap.hasData) {
-            return const Center(child: CircularProgressIndicator());
+            return const LoadingView();
           }
           final all = snap.data!;
           // 목록이 비었거나 한쪽 상태만 있을 수 있어서 firstWhere 대신 찾기만 해요.

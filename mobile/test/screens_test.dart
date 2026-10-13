@@ -8,6 +8,7 @@ import 'package:gieokhaejwo/screens/alert_list_screen.dart';
 import 'package:gieokhaejwo/screens/found_detail_screen.dart';
 import 'package:gieokhaejwo/screens/lock_screen.dart';
 import 'package:gieokhaejwo/screens/report_screen.dart';
+import 'package:gieokhaejwo/screens/splash_screen.dart';
 import 'package:gieokhaejwo/theme/app_theme.dart';
 
 Widget _wrap(Widget screen) =>
@@ -39,8 +40,10 @@ void main() {
     expect(searching.maskedName, '김○○');
   });
 
-  testWidgets('시연 메뉴에 화면 7개가 보여요', (tester) async {
+  testWidgets('첫 화면 로고가 끝나면 시연 메뉴에 화면 7개가 보여요', (tester) async {
     await tester.pumpWidget(const GieokhaejwoApp());
+    expect(find.text('기억해줘'), findsOneWidget);
+    await tester.pump(SplashScreen.duration);
     await tester.pumpAndSettle();
     expect(find.text('경보 목록'), findsOneWidget);
     expect(find.text('발견 완료 상세'), findsOneWidget);

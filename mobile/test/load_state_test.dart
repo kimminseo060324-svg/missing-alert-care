@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -8,6 +9,7 @@ import 'package:gieokhaejwo/screens/demo_menu_screen.dart';
 import 'package:gieokhaejwo/screens/report_screen.dart';
 import 'package:gieokhaejwo/theme/app_theme.dart';
 import 'package:gieokhaejwo/widgets/load_state_view.dart';
+import 'package:gieokhaejwo/widgets/loading_view.dart';
 import 'package:gieokhaejwo/widgets/section_card.dart';
 
 /// 시연용 가짜 데이터 원본 (assets/data/missing-alerts.json)
@@ -76,12 +78,46 @@ void main() {
     await tester.pumpWidget(_menu(repo));
     await tester.pumpAndSettle();
     expect(find.text(LoadErrorView.message), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(LoadingView), findsNothing);
 
     await tester.tap(find.text('다시 시도'));
     await tester.pumpAndSettle();
     expect(calls, 2);
     expect(find.text(LoadErrorView.message), findsNothing);
+    expect(find.text('경보 목록'), findsOneWidget);
+  });
+
+  testWidgets('너무 오래 걸리면 로딩 후 실패 안내가 떠요', (tester) async {
+    final repo = AlertRepository.fromRaw(() => Completer<String>().future);
+    await tester.pumpWidget(_menu(repo));
+    await tester.pump();
+    expect(find.byType(LoadingView), findsOneWidget);
+
+    await tester.pump(AlertRepository.timeout);
+    await tester.pump();
+    expect(find.byType(LoadingView), findsNothing);
+    expect(find.text(LoadErrorView.message), findsOneWidget);
+  });
+
+  testWidgets('다시 시도를 누르면 로딩이 다시 보였다가 목록이 떠요', (tester) async {
+    var calls = 0;
+    final second = Completer<String>();
+    final repo = AlertRepository.fromRaw(() {
+      calls++;
+      return calls == 1 ? Future.error('연결 실패') : second.future;
+    });
+    await tester.pumpWidget(_menu(repo));
+    await tester.pumpAndSettle();
+    expect(find.text(LoadErrorView.message), findsOneWidget);
+
+    await tester.tap(find.text('다시 시도'));
+    await tester.pump();
+    expect(find.byType(LoadingView), findsOneWidget);
+    expect(find.text(LoadErrorView.message), findsNothing);
+
+    second.complete(_goodJson);
+    await tester.pumpAndSettle();
+    expect(find.byType(LoadingView), findsNothing);
     expect(find.text('경보 목록'), findsOneWidget);
   });
 

@@ -8,6 +8,7 @@ import '../theme/app_text.dart';
 import '../widgets/alert_list_item.dart';
 import '../widgets/hero_header.dart';
 import '../widgets/load_state_view.dart';
+import '../widgets/loading_view.dart';
 import '../widgets/section_card.dart';
 
 enum _Filter { all, searching, found }
@@ -125,10 +126,12 @@ class _AlertListScreenState extends State<AlertListScreen> {
                 ),
               ),
               Expanded(
-                child: snap.hasError
+                child: snap.connectionState == ConnectionState.waiting
+                    ? const LoadingView()
+                    : snap.hasError
                     ? LoadErrorView(onRetry: _retry)
                     : !snap.hasData
-                    ? const Center(child: CircularProgressIndicator())
+                    ? const LoadingView()
                     : ListView(
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                         children: [

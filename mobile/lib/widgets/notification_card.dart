@@ -5,6 +5,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import 'app_button.dart';
 import 'outfit_figure.dart';
+import 'person_mark.dart';
 import 'section_card.dart';
 import 'status_chip.dart';
 import 'swatch_tile.dart';
@@ -12,7 +13,8 @@ import 'swatch_tile.dart';
 /// 잠금화면 알림 카드의 공통 틀 (아이콘 · 보낸 곳 · 오른쪽 칩/시간).
 class _NotiShell extends StatelessWidget {
   const _NotiShell({
-    required this.icon,
+    this.icon = '',
+    this.iconMark,
     required this.iconColor,
     required this.source,
     required this.sourceColor,
@@ -24,6 +26,9 @@ class _NotiShell extends StatelessWidget {
   });
 
   final String icon;
+
+  /// 글자 대신 넣는 그림 (실종경보 알림은 사람 모양)
+  final Widget? iconMark;
   final Color iconColor;
   final String source;
   final Color sourceColor;
@@ -62,14 +67,16 @@ class _NotiShell extends StatelessWidget {
                       color: iconColor,
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: Text(
-                      icon,
-                      style: appText(
-                        11,
-                        weight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
-                    ),
+                    child:
+                        iconMark ??
+                        Text(
+                          icon,
+                          style: appText(
+                            11,
+                            weight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -140,7 +147,7 @@ class AlertNotiFolded extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _NotiShell(
-      icon: '!',
+      iconMark: const PulseOnce(child: PersonMark()),
       iconColor: AppColors.navy,
       source: '실종경보 · ${alert.region}',
       sourceColor: AppColors.navy,
@@ -200,7 +207,7 @@ class AlertNotiExpanded extends StatelessWidget {
         );
 
     return _NotiShell(
-      icon: '!',
+      iconMark: const PulseOnce(child: PersonMark()),
       iconColor: AppColors.navy,
       source: '실종경보 · ${alert.region}',
       sourceColor: AppColors.navy,

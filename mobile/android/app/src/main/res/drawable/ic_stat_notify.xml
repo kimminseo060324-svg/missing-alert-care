@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 휴대폰 위 작은 알림 아이콘 (사람 모양). 색은 휴대폰이 알아서 바꿔 보여 줘요. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+    <path
+        android:pathData="M28,98C28,80 39,68 52,65A16,16 0,1 1,68 65C81,68 92,80 92,98"
+        android:strokeWidth="10"
+        android:strokeColor="#FF121D64"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
