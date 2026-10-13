@@ -184,6 +184,8 @@ class _ReportScreenState extends State<ReportScreen> {
                     textAlign: TextAlign.center,
                     style: appText(12, color: AppColors.gray600, height: 1.5),
                   ),
+                  const SizedBox(height: 12),
+                  const SourceText(center: true),
                 ],
               ),
             ),

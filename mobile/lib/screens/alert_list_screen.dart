@@ -7,6 +7,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../widgets/alert_list_item.dart';
 import '../widgets/hero_header.dart';
+import '../widgets/load_state_view.dart';
 import '../widgets/section_card.dart';
 
 enum _Filter { all, searching, found }
@@ -14,7 +15,10 @@ enum _Filter { all, searching, found }
 /// 04 경보 목록 ("내 주변 실종경보")
 /// 경찰청 자료엔 좌표가 없어서 거리 대신 지역명을 보여줘요.
 class AlertListScreen extends StatefulWidget {
-  const AlertListScreen({super.key});
+  const AlertListScreen({super.key, this.repository});
+
+  /// 비워 두면 앱 안의 가짜 데이터를 읽어요. (테스트에서 바꿔 끼워요)
+  final AlertRepository? repository;
 
   @override
   State<AlertListScreen> createState() => _AlertListScreenState();
@@ -22,11 +26,19 @@ class AlertListScreen extends StatefulWidget {
 
 class _AlertListScreenState extends State<AlertListScreen> {
   _Filter _filter = _Filter.all;
+  AlertRepository get _repo => widget.repository ?? AlertRepository.instance;
+  late Future<List<MissingAlert>> _future = _repo.loadAll();
+
+  void _retry() {
+    setState(() {
+      _future = _repo.loadAll();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<MissingAlert>>(
-      future: AlertRepository.instance.loadAll(),
+      future: _future,
       builder: (context, snap) {
         final all = snap.data ?? const <MissingAlert>[];
         final searching = all.where((a) => !a.isFound).toList();
@@ -113,7 +125,9 @@ class _AlertListScreenState extends State<AlertListScreen> {
                 ),
               ),
               Expanded(
-                child: !snap.hasData
+                child: snap.hasError
+                    ? LoadErrorView(onRetry: _retry)
+                    : !snap.hasData
                     ? const Center(child: CircularProgressIndicator())
                     : ListView(
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -128,6 +142,10 @@ class _AlertListScreenState extends State<AlertListScreen> {
                             ],
                           ),
                           const SizedBox(height: 14),
+                          if (shown.isEmpty) ...[
+                            EmptyNotice(title: _emptyText),
+                            const SizedBox(height: 10),
+                          ],
                           for (final (i, a) in shown.indexed) ...[
                             AlertListItem(
                               alert: a,
@@ -148,6 +166,12 @@ class _AlertListScreenState extends State<AlertListScreen> {
       },
     );
   }
+
+  String get _emptyText => switch (_filter) {
+    _Filter.all => '지금 표시할 경보가 없어요',
+    _Filter.searching => '지금 수색 중인 경보가 없어요',
+    _Filter.found => '발견 완료된 경보가 없어요',
+  };
 
   Widget _chip(String label, _Filter value) {
     final on = _filter == value;

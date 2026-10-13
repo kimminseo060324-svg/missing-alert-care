@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'data/alert_repository.dart';
 import 'models/missing_alert.dart';
 import 'screens/alert_detail_screen.dart';
 import 'screens/alert_list_screen.dart';
@@ -13,8 +14,10 @@ class AppRoutes {
   static Future<void> _push(BuildContext context, Widget screen) =>
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
 
-  static Future<void> list(BuildContext context) =>
-      _push(context, const AlertListScreen());
+  static Future<void> list(
+    BuildContext context, {
+    AlertRepository? repository,
+  }) => _push(context, AlertListScreen(repository: repository));
 
   /// 수색 중이면 05 상세, 발견 완료면 07 발견 완료 상세
   static Future<void> detail(BuildContext context, MissingAlert alert) => _push(

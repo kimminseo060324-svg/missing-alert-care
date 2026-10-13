@@ -5,14 +5,16 @@
 
 ## 내 컴퓨터에서 실행하기
 
-1. Flutter 설치: https://docs.flutter.dev/get-started/install (Android Studio도 같이 설치). Flutter 3.27 이상이 필요해요.
-2. 설치 확인: 터미널에서 `flutter doctor` → 빨간 X가 없으면 준비 끝
+1. Flutter 설치: https://docs.flutter.dev/get-started/install (Android Studio도 같이 설치).
+   팀 버전은 **Flutter 3.41.9 stable (Dart 3.11)** 이에요. `.fvmrc`에 고정돼 있어서
+   [fvm](https://fvm.app)을 쓰면 `fvm install`로 같은 버전을 받을 수 있어요. (fvm을 쓰면 아래 `flutter`를 `fvm flutter`로 바꿔 입력)
+2. 설치 확인: 터미널에서 `flutter --version`(3.41.9인지) → `flutter doctor` → 빨간 X가 없으면 준비 끝
 3. 안드로이드 폰을 USB로 연결하고 "USB 디버깅"을 켜요 (없으면 Android Studio의 에뮬레이터)
 4. 이 폴더에서:
 
 ```bash
 cd mobile
-flutter pub get
+flutter pub get --enforce-lockfile
 flutter run
 ```
 
