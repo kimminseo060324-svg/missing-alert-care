@@ -1,6 +1,11 @@
 """테스트 공통 설정. 저장소 루트에서 `pytest backend`로 실행한다."""
+import os
 import sys
 from pathlib import Path
+
+# 테스트는 가상 데이터 기준이다. .env나 환경변수가 safe182여도 앱을 불러오기 전에 sample로 고정한다
+# (load_dotenv는 이미 있는 환경변수를 덮어쓰지 않으므로 이 값이 유지된다)
+os.environ["DATA_SOURCE"] = "sample"
 
 import pytest
 

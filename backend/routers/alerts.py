@@ -7,9 +7,9 @@ source와 is_sample은 데이터를 읽어 온 모듈(source)이 정한다.
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-from services import sample_data as source  # 실제 API로 바꿀 때 이 줄만 교체
+from services.data_source import source  # .env의 DATA_SOURCE로 가상(sample)·실제(safe182) 선택
 
 KST = timezone(timedelta(hours=9))
 FOUND_VISIBLE = timedelta(days=3)  # 발견 완료 후 목록·상세에 남아 있는 기간
@@ -26,7 +26,8 @@ TARGET_LABELS = {
 
 class Status(str, Enum):
     searching = "수색중"
-    found = "발견완료"
+    ended = "경보종료"  # 실제 모드에서 목록에서 3번 연속 빠진 경보
+    found = "발견완료"  # 시연용 /test/found만
 
 
 router = APIRouter()
@@ -62,7 +63,7 @@ def _enrich(raw):
     return {
         **raw,
         "occrAdres": (raw.get("occrAdres") or "").strip(),
-        "status": st.get("status", Status.searching.value),
+        "status": st.get("status", source.status_of(raw)),
         "issued_at": issued.isoformat() if issued else None,
         "found_at": st["found_at"].isoformat() if st.get("found_at") else None,
         "target_label": TARGET_LABELS.get(raw.get("writngTrgetDscd"), "기타"),
@@ -87,7 +88,7 @@ def _find(sid):
 @router.get("/alerts", tags=["alerts"], summary="경보 목록")
 def list_alerts(
     days: int | None = Query(None, ge=1, le=36500, description="최근 며칠 안에 발령된 경보만 (생략하면 전체)"),
-    status: Status | None = Query(None, description="수색중 / 발견완료"),
+    status: Status | None = Query(None, description="수색중 / 경보종료(실제 모드) / 발견완료(시연용)"),
 ):
     raws, notice = source.load_alerts()
     # 가상 데이터는 발생일이 고정이라, 기본값으로 날짜를 거르면 시간이 지나 목록이 비어 버린다.
@@ -117,14 +118,22 @@ def get_alert(sid: int):
     return _enrich(raw)
 
 
-@router.post("/test/fire/{sid}", tags=["test"], summary="시연용: 방금 발령된 새 경보로 만들기")
+def _sample_only():
+    """실제 데이터 모드에서는 가짜 경보를 만들거나 바꿀 수 없게 막는다."""
+    if not source.IS_SAMPLE:
+        raise HTTPException(403, "시연용 API는 가상 데이터 모드(DATA_SOURCE=sample)에서만 쓸 수 있습니다")
+
+
+@router.post("/test/fire/{sid}", tags=["test"], summary="시연용: 방금 발령된 새 경보로 만들기",
+             dependencies=[Depends(_sample_only)])
 def test_fire(sid: int):
     _find(sid)
     _state[sid] = {"status": Status.searching.value, "issued_at": _now(), "found_at": None}
     return _enrich(_find(sid))
 
 
-@router.post("/test/found/{sid}", tags=["test"], summary="시연용: 발견 완료로 바꾸기")
+@router.post("/test/found/{sid}", tags=["test"], summary="시연용: 발견 완료로 바꾸기",
+             dependencies=[Depends(_sample_only)])
 def test_found(sid: int):
     _find(sid)
     _state.setdefault(sid, {}).update(status=Status.found.value, found_at=_now())
