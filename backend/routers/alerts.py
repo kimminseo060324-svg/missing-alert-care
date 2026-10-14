@@ -1,6 +1,7 @@
 """실종경보 API와 시연용 API.
 
-원본 필드는 그대로 두고 status, found_at, ended_at, issued_at, target_label, photo_url, source, is_sample만 덧붙인다.
+원본 필드는 그대로 두고 status, found_at, ended_at, issued_at, target_label, photo_url, source, is_sample, ai만 덧붙인다.
+ai는 상세·시연용 응답에서 {status, clothing, summary, extracted_at}, 목록에서 {status, summary} (services/ai_features).
 source와 is_sample은 데이터를 읽어 온 모듈(source)이 정한다.
 시연용 상태(발령·발견)는 메모리에만 있어서 서버를 다시 켜면 처음 상태로 돌아간다.
 """
@@ -9,7 +10,7 @@ from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from services import push
+from services import ai_features, push
 from services.data_source import source  # .env의 DATA_SOURCE로 가상(sample)·실제(safe182) 선택
 
 KST = timezone(timedelta(hours=9))
@@ -56,8 +57,8 @@ def _issued_at(raw):
     return st.get("issued_at") or _parse_occrde(raw.get("occrde"))
 
 
-def _enrich(raw):
-    """원본 항목에 추가 필드를 붙인다. 원본 딕셔너리는 바꾸지 않는다."""
+def _enrich(raw, full_ai=True):
+    """원본 항목에 추가 필드를 붙인다. 원본 딕셔너리는 바꾸지 않는다. full_ai=False면 목록용 ai."""
     sid = raw["msspsnIdntfccd"]
     st = _state.get(sid, {})
     issued = _issued_at(raw)
@@ -75,6 +76,7 @@ def _enrich(raw):
         "photo_url": None,
         "source": source.SOURCE,
         "is_sample": source.IS_SAMPLE,
+        "ai": ai_features.view(sid, full=full_ai),
     }
 
 
@@ -106,7 +108,7 @@ def list_alerts(
         issued = _issued_at(raw)
         if since is not None and (issued is None or issued < since):  # 날짜를 모르면 거를 수 없어 뺀다
             continue
-        item = _enrich(raw)
+        item = _enrich(raw, full_ai=False)
         if status and item["status"] != status.value:
             continue
         rows.append((issued, item))
@@ -135,6 +137,7 @@ def _sample_only():
 def test_fire(sid: int):
     _find(sid)
     _state[sid] = {"status": Status.searching.value, "issued_at": _now(), "found_at": None, "ended_at": None}
+    ai_features.submit([_find(sid)])  # 옷차림 추출은 기다리지 않음 (캐시에 있으면 바로 done)
     item = _enrich(_find(sid))
     return {**item, "push": push.send("issued", item, item["status"], dedup=True)}
 

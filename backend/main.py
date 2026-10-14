@@ -9,17 +9,21 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from routers import alerts
-from services import push, sync
+from services import ai_features, push, sync
 from services.data_source import source
 
 
 @asynccontextmanager
 async def lifespan(app):
     push.init()  # 키가 없으면 푸시만 끄고 로그 한 줄
+    stop_ai = ai_features.start()
+    if source.IS_SAMPLE:
+        ai_features.submit(source.load_alerts()[0])  # 가상 경보 옷차림 추출 (기다리지 않음)
     shutdown = None if source.IS_SAMPLE else sync.start()
     yield
     if shutdown:
         shutdown()
+    await stop_ai()
 
 
 app = FastAPI(title="Missing Alert Care API", lifespan=lifespan)
