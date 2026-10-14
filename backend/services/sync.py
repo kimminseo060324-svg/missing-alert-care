@@ -10,15 +10,17 @@
 """
 import json
 import logging
+import math
 import os
 import threading
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from services import safe182
 
 KST = timezone(timedelta(hours=9))
-INTERVAL = int(os.getenv("SAFE182_SYNC_INTERVAL_SEC") or 300)
+DEFAULT_INTERVAL, MIN_INTERVAL = 300, 60
+INTERVAL = DEFAULT_INTERVAL  # start()에서 .env의 SAFE182_SYNC_INTERVAL_SEC로 다시 정한다
 BACKOFF = [60, 300, 900]  # 실패가 이어질 때 다시 시도하기까지 기다리는 초
 DAILY_LIMIT = 1000
 WARN_AT = 900
@@ -43,7 +45,14 @@ def _now():
 
 
 def on_new_alert(alerts):
-    """신규 경보가 생기면 불린다. 나중에 FCM 푸시 발송을 여기에 붙인다. 지금은 건수만 남긴다."""
+    """신규 경보가 생기면 불린다. 나중에 FCM 푸시 발송을 여기에 붙인다. 지금은 건수만 남긴다.
+
+    FCM을 붙일 때 주의:
+    - 지금은 Tracker.update()가 이 함수를 부르기 전에 notified=True를 먼저 저장한다.
+      그대로 두면 발송이 실패한 경보는 다시 보내지 않고 묻힌다.
+      발송 성공 후 notified를 기록해야 하고, 실패 건 재전송 처리가 필요하다.
+    - alerts에는 실명 등 원본이 들어 있으므로 로그에는 건수만 남긴다.
+    """
     log.info("신규 경보 %d건", len(alerts))
 
 
@@ -67,6 +76,7 @@ class Tracker:
         self.calls = {"date": None, "count": 0, "stopped": False, "warned": False}
         self.problem = None  # 응답에 붙일 안내 (조회 실패, 한도 초과 등)
         self.follower = False  # 다른 프로세스가 조회 담당이면 True
+        self.estimated = False  # 하루 예상 호출 수를 이미 로그에 남겼는지
         self._load()
 
     # 저장 ---------------------------------------------------------------
@@ -200,6 +210,26 @@ class Tracker:
 TRACKER = Tracker()
 
 
+def estimate_daily_calls(total, interval):
+    """(회차당 호출 수, 하루 예상 호출 수, 한도 경고선 아래로 두려면 필요한 최소 간격 초)."""
+    pages = max(1, math.ceil(total / safe182.ROW_SIZE))
+    daily = math.ceil(86400 / interval) * pages
+    need = max(MIN_INTERVAL, math.ceil(86400 * pages / WARN_AT))
+    return pages, daily, need
+
+
+def _log_estimate(tracker, total):
+    """첫 조회 뒤 한 번만, 전체 건수로 하루 예상 호출 수를 남기고 경고선을 넘으면 경고한다."""
+    if tracker.estimated:
+        return
+    tracker.estimated = True
+    pages, daily, need = estimate_daily_calls(total, INTERVAL)
+    log.info("하루 예상 호출 %d회 (전체 %d건 → 회차당 %d번 호출, 조회 간격 %d초)", daily, total, pages, INTERVAL)
+    if daily > WARN_AT:
+        log.warning("하루 예상 호출이 %d회를 넘습니다. 간격을 %d초 이상으로 늘려야 합니다 (SAFE182_SYNC_INTERVAL_SEC)",
+                    WARN_AT, need)
+
+
 def poll_once(tracker, api_id, api_key, failures, now=None, fetch=safe182.fetch_all):
     """한 회차 조회. (다음 조회까지 기다릴 초, 연속 실패 횟수) 를 돌려준다."""
     now = now or _now()
@@ -219,6 +249,7 @@ def poll_once(tracker, api_id, api_key, failures, now=None, fetch=safe182.fetch_
             tracker.problem = "최근 실제 데이터 조회에 실패해 마지막으로 받은 목록을 보여줍니다."
         log.warning("조회 실패 %d회째: %s — %d초 뒤 다시 시도", failures, e, wait)
         return wait, failures
+    _log_estimate(tracker, total)
     if skipped:
         log.warning("형식이 맞지 않는 항목 %d건을 건너뛰었습니다", skipped)
     if received != total:
@@ -233,8 +264,23 @@ def poll_once(tracker, api_id, api_key, failures, now=None, fetch=safe182.fetch_
     return INTERVAL, 0
 
 
+def read_interval(value):
+    """SAFE182_SYNC_INTERVAL_SEC 값 → (쓸 간격 초, 설명). 비었거나 숫자가 아니거나 0 이하면 기본값, 60초 미만이면 60초."""
+    text = (value or "").strip()
+    try:
+        sec = int(text)
+    except ValueError:
+        return DEFAULT_INTERVAL, "숫자가 아니어서 기본값 사용" if text else "설정이 없거나 비어 있어 기본값 사용"
+    if sec <= 0:
+        return DEFAULT_INTERVAL, "0 이하라서 기본값 사용"
+    if sec < MIN_INTERVAL:
+        return MIN_INTERVAL, f"{MIN_INTERVAL}초보다 짧아 {MIN_INTERVAL}초로 올림"
+    return sec, ".env 설정값"
+
+
 def start():
     """서버 시작 시 부른다. 조회 담당이 되면 백그라운드 조회를 시작하고, 멈추는 함수를 돌려준다."""
+    global INTERVAL
     api_id, api_key = os.getenv("MISSING_ALERT_API_ID"), os.getenv("MISSING_ALERT_API_KEY")
     if not (api_id and api_key):
         TRACKER.problem = "MISSING_ALERT_API_ID / MISSING_ALERT_API_KEY가 없어 실제 데이터를 조회할 수 없습니다."
@@ -255,6 +301,7 @@ def start():
         return None
 
     TRACKER.__init__(state_dir / "safe182-state.json")  # 저장된 상태(식별번호·시각·상태·호출 횟수) 불러오기
+    INTERVAL, why = read_interval(os.getenv("SAFE182_SYNC_INTERVAL_SEC"))
     stop = threading.Event()
 
     def loop():
@@ -269,7 +316,7 @@ def start():
             stop.wait(wait)
 
     threading.Thread(target=loop, name="safe182-sync", daemon=True).start()
-    log.info("안전Dream 조회 시작 (간격 %d초)", INTERVAL)
+    log.info("안전Dream 조회 시작 — 조회 간격 %d초 (%s)", INTERVAL, why)
 
     def shutdown():
         stop.set()
