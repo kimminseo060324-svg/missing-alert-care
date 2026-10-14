@@ -140,7 +140,7 @@ def test_eval_files_match_sample_structure():
     eval_msg = json.loads((DATA / "disaster-messages-eval.json").read_text(encoding="utf-8"))
     assert list(eval_msg) == list(sample_msg)
     assert all(list(m) == list(sample_msg["body"][0]) for m in eval_msg["body"])
-    assert sorted(EVAL_MSGS) == sorted(EVAL_LABELS) == list(range(9910001, 9910016))
+    assert sorted(EVAL_MSGS) == sorted(EVAL_LABELS) == list(range(9910001, 9910031))
     assert not set(EVAL_MSGS) & set(MSGS)
     assert all(set(l) == set(next(iter(LABELS.values()))) and l["is_missing"] for l in EVAL_LABELS.values())
 
@@ -167,9 +167,35 @@ def test_redact_keeps_title_words():
     assert "어린이(남,9세)" in preprocess.redact("고잔동 놀이터에서 서임시 어린이(남,9세) 실종")
 
 
+@pytest.mark.parametrize(("raw", "name", "kept"), [
+    ("첨단동 변가명(남24) 지적장애 있음", "변가명", "(남24)"),          # 괄호 안 쉼표 없음
+    ("[대전시]둔산동/장예제/남/85/162cm", "장예제", "둔산동/"),         # 슬래시 형식
+    ("하교 후 사라진 김연습(남,9세) 학생 찾습니다", "김연습", "학생"),
+    ("중학생 임가명군(15) 가출 후", "임가명", "군(15)"),
+    ("연락두절된 정가짜(남,81) 님을 찾습니다", "정가짜", "님을"),
+    ("거동이 불편하신 배샘플(남, 88세) 어르신을", "배샘플", "어르신"),
+    ("불당동 조예시 할머니 80세", "조예시", "할머니"),
+    ("효자동 이테스트씨 남72세 실종", "이테스트", "남72세"),
+])
+def test_redact_name_formats(raw, name, kept):
+    out = preprocess.redact(raw)
+    assert name not in out and kept in out  # 이름만 지우고 호칭·성별·나이는 남긴다
+
+
+def test_eval_new_labels_follow_rules():
+    out = {sn: label_to_output(l) for sn, l in EVAL_LABELS.items()}
+    assert out[9910022]["negatives"] == ["모자", "가방"]               # 모자X 가방X
+    assert out[9910030]["upper"]["type"] == "꽃무늬 원피스"            # 원피스는 upper
+    assert out[9910030]["lower"]["type"] == "스타킹"                   # lower는 스타킹만
+    assert out[9910028]["accessories"] == [{"type": "보행보조기", "color": ""}]
+    assert {a["type"] for a in out[9910026]["accessories"]} == {"모자", "마스크"}  # 착용한 모자·마스크는 소지품
+    assert out[9910008]["upper"]["color"] == "베이지색"                # 아이보리 → 베이지
+    assert "일체형" in EVAL_LABELS[9910030]["hard_cases"]
+
+
 def test_run_eval_datasets():
     from ai import run_eval
-    for name, n in [("sample", 45), ("eval", 15), ("all", 60)]:
+    for name, n in [("sample", 45), ("eval", 30), ("all", 75)]:
         msgs, labels = run_eval.load(name)
         assert len(msgs) == len(labels) == n
 
