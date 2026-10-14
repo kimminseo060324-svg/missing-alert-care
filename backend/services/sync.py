@@ -319,7 +319,12 @@ def start():
                 failures += 1
                 wait = BACKOFF[min(failures, len(BACKOFF)) - 1]
                 log.error("예상하지 못한 오류(%s) — %d초 뒤 다시 시도", type(e).__name__, wait)
-            stop.wait(wait)
+            try:
+                stop.wait(min(wait, MAX_INTERVAL))
+            except (OverflowError, ValueError) as e:
+                # 대기에 실패해도 스레드는 살리고, 쉬지 않고 다시 조회하지 않도록 기본 간격만큼 기다린다
+                log.error("대기 시간을 쓸 수 없어(%s) %d초로 대신 기다립니다", type(e).__name__, DEFAULT_INTERVAL)
+                stop.wait(DEFAULT_INTERVAL)
 
     threading.Thread(target=loop, name="safe182-sync", daemon=True).start()
     log.info("안전Dream 조회 시작 — 조회 간격 %d초 (%s)", INTERVAL, why)
