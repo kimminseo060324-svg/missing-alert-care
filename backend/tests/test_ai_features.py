@@ -25,6 +25,7 @@ def fresh(monkeypatch, tmp_path):
     monkeypatch.setattr(ai_features, "_results", {})
     monkeypatch.setattr(ai_features, "_cache", {})
     monkeypatch.setattr(ai_features, "_waiting", {})
+    monkeypatch.setattr(ai_features, "_current", {})
     monkeypatch.setattr(ai_features, "_client", None)
     monkeypatch.setattr(ai_features, "CACHE_PATH", tmp_path / "ai_cache.json")
     monkeypatch.setattr(ai_features.extract_ai, "call_interval", lambda: 0)
@@ -377,3 +378,122 @@ def test_wrong_shape_entry_with_current_config_is_ignored(gemini, entry):
         for it in c.get("/alerts").json()["list"]:
             check_shape(it["ai"], full=False)
     assert len(gemini.calls) == len(SIDS)
+
+
+
+# 늦게 끝난 예전 요청이 최신 결과를 덮어쓰지 않기 -------------------------------------------
+
+TEXT_A, TEXT_B = "회색 점퍼 남성을 찾습니다", "빨간 패딩 남성을 찾습니다"
+
+
+@pytest.fixture
+def by_text(monkeypatch):
+    """문장별로 다른 결과를 주는 가짜 Gemini. gates[문장]이 있으면 열릴 때까지 기다린다."""
+    class Fake:
+        calls, gates = [], {}
+
+        def __call__(self, text):
+            self.calls.append(text)
+            if text in self.gates:
+                self.gates[text].wait(5)
+            return {**FAKE_OUT, "summary": [text[:5]]}
+    fake = Fake()
+    fake.calls, fake.gates = [], {}
+    monkeypatch.setattr(ai_features, "_call_gemini", fake)
+    return fake
+
+
+@pytest.fixture
+def text_of(monkeypatch):
+    """경보별 보낼 문장을 테스트에서 바꿀 수 있게 (문자 내용 갱신 흉내)."""
+    texts = {}
+    monkeypatch.setattr(ai_features, "source_text", lambda raw: texts.get(raw["msspsnIdntfccd"]))
+    return texts
+
+
+def summary(sid):
+    return ai_features.view(sid)["summary"]
+
+
+def test_late_old_result_does_not_overwrite_newer(by_text, text_of, logs):
+    """A 시작 → B 시작 → B 먼저 완료(캐시) → A 늦게 완료 → 최종 결과는 B."""
+    with TestClient(app):
+        text_of[1] = TEXT_B
+        ai_features.submit([{"msspsnIdntfccd": 1}])  # B를 미리 추출해 캐시에 둠 (다른 경보)
+        assert wait_until(lambda: summary(1) == [TEXT_B[:5]])
+
+        by_text.gates[TEXT_A] = threading.Event()
+        text_of[2] = TEXT_A
+        ai_features.submit([{"msspsnIdntfccd": 2}])  # 요청 A 시작 (멈춰 있음)
+        assert wait_until(lambda: TEXT_A in by_text.calls)
+        text_of[2] = TEXT_B
+        ai_features.submit([{"msspsnIdntfccd": 2}])  # 요청 B: 캐시에 있어 바로 완료
+        assert summary(2) == [TEXT_B[:5]]
+        by_text.gates[TEXT_A].set()  # A가 늦게 완료
+        assert wait_until(lambda: not ai_features._waiting)
+        assert ai_features.view(2)["status"] == "done" and summary(2) == [TEXT_B[:5]]  # B 유지
+    assert any("새 요청이 있어 반영하지 않았습니다" in m for m in logs)
+    assert any(k for k, (_, r) in ai_features._cache.items() if r["summary"] == [TEXT_A[:5]])  # 버린 결과도 캐시에
+
+
+def test_old_result_waits_for_newer_request(by_text, text_of):
+    """A 진행 중 B 요청(캐시 없음) → A가 끝나도 pending 유지 → B 완료 후 B."""
+    with TestClient(app):
+        by_text.gates[TEXT_A], by_text.gates[TEXT_B] = threading.Event(), threading.Event()
+        text_of[2] = TEXT_A
+        ai_features.submit([{"msspsnIdntfccd": 2}])
+        assert wait_until(lambda: TEXT_A in by_text.calls)
+        text_of[2] = TEXT_B
+        ai_features.submit([{"msspsnIdntfccd": 2}])
+        by_text.gates[TEXT_A].set()
+        assert wait_until(lambda: TEXT_B in by_text.calls)  # A는 끝났고 B 진행 중
+        assert ai_features.view(2)["status"] == "pending"  # A 결과로 덮지 않음
+        by_text.gates[TEXT_B].set()
+        assert wait_until(lambda: ai_features.view(2)["status"] == "done")
+        assert summary(2) == [TEXT_B[:5]]
+
+
+def test_text_removed_while_running_keeps_unavailable(by_text, text_of):
+    """진행 중에 보낼 글이 없어지면(예: AI 끔) 늦게 끝난 결과를 반영하지 않는다."""
+    with TestClient(app):
+        by_text.gates[TEXT_A] = threading.Event()
+        text_of[2] = TEXT_A
+        ai_features.submit([{"msspsnIdntfccd": 2}])
+        assert wait_until(lambda: TEXT_A in by_text.calls)
+        del text_of[2]
+        ai_features.submit([{"msspsnIdntfccd": 2}])
+        by_text.gates[TEXT_A].set()
+        assert wait_until(lambda: not ai_features._waiting)
+        assert ai_features.view(2)["status"] == "unavailable"
+
+
+def test_same_key_twice_calls_once_and_applies(by_text, text_of):
+    with TestClient(app):
+        by_text.gates[TEXT_A] = threading.Event()
+        text_of[2] = TEXT_A
+        ai_features.submit([{"msspsnIdntfccd": 2}])
+        assert wait_until(lambda: TEXT_A in by_text.calls)
+        ai_features.submit([{"msspsnIdntfccd": 2}])  # 같은 문장으로 다시 요청 (진행 중)
+        by_text.gates[TEXT_A].set()
+        assert wait_until(lambda: ai_features.view(2)["status"] == "done")
+        ai_features.submit([{"msspsnIdntfccd": 2}])  # 끝난 뒤 또 요청 → 캐시
+    assert by_text.calls.count(TEXT_A) == 1
+    assert summary(2) == [TEXT_A[:5]]
+    check_shape(ai_features.view(2), full=True)
+
+
+def test_back_to_first_text_applies_first_and_drops_middle(by_text, text_of):
+    """A 진행 중 → B 요청 → 다시 A 요청 → A 완료는 반영, 나중에 끝난 B는 버림."""
+    with TestClient(app):
+        by_text.gates[TEXT_A] = threading.Event()
+        text_of[2] = TEXT_A
+        ai_features.submit([{"msspsnIdntfccd": 2}])
+        assert wait_until(lambda: TEXT_A in by_text.calls)
+        text_of[2] = TEXT_B
+        ai_features.submit([{"msspsnIdntfccd": 2}])
+        text_of[2] = TEXT_A
+        ai_features.submit([{"msspsnIdntfccd": 2}])
+        by_text.gates[TEXT_A].set()
+        assert wait_until(lambda: TEXT_B in by_text.calls and not ai_features._waiting)
+        assert ai_features.view(2)["status"] == "done" and summary(2) == [TEXT_A[:5]]
+    assert by_text.calls.count(TEXT_A) == 1
