@@ -1,8 +1,8 @@
 {
-  "_comment": "앱 시연용 가짜 데이터. 경찰청 API 필드(sample-data/missing-alerts.json)와 같은 이름 + 앱 전용 필드 3개: clothingTop(상의), clothingBottom(하의·신발)은 행안부 재난문자에서 AI가 뽑을 값, demoFoundTime은 발견 완료 시연용(값이 있으면 발견 완료로 표시).",
+  "_comment": "앱 시연용 가짜 데이터. 경찰청 API 필드(sample-data/missing-alerts.json)와 같은 이름 + 앱 전용 필드 3개: clothingTop(상의), clothingBottom(하의·신발)은 행안부 재난문자에서 AI가 뽑을 값, demoFoundTime은 발견 완료 시연용(값이 있으면 발견 완료로 표시). status는 서버 응답과 같은 글자로 상태를 정해요(9990007은 경보 종료 시연용).",
   "result": "00",
   "msg": "OK",
-  "totalCount": 6,
+  "totalCount": 7,
   "list": [
     {
       "rnum": 1,
@@ -147,6 +147,31 @@
       "clothingTop": "파란 후드티",
       "clothingBottom": "청바지, 검정 운동화",
       "demoFoundTime": ""
+    },
+    {
+      "rnum": 7,
+      "occrde": "20260928",
+      "nm": "윤예시",
+      "age": 74,
+      "ageNow": "74",
+      "sexdstnDscd": "여자",
+      "nltyDscd": "내국인",
+      "writngTrgetDscd": "070",
+      "occrAdres": "경기도 가상시 예시동",
+      "height": 152,
+      "bdwgh": 48,
+      "frmDscd": "마른",
+      "faceshpeDscd": "계란형",
+      "hairshpeDscd": "단발머리",
+      "haircolrDscd": "흰색",
+      "alldressingDscd": "보라색 조끼, 회색 바지",
+      "msspsnIdntfccd": 9990007,
+      "tknphotolength": 0,
+      "tknphotoFile": "",
+      "clothingTop": "보라색 조끼",
+      "clothingBottom": "회색 바지, 흰 운동화",
+      "demoFoundTime": "",
+      "status": "경보종료"
     }
   ]
 }

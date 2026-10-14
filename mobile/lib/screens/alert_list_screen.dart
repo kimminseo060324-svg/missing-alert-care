@@ -42,7 +42,7 @@ class _AlertListScreenState extends State<AlertListScreen> {
       future: _future,
       builder: (context, snap) {
         final all = snap.data ?? const <MissingAlert>[];
-        final searching = all.where((a) => !a.isFound).toList();
+        final searching = all.where((a) => a.isSearching).toList();
         final regions = searching.map((a) => a.region).toSet().take(2);
         final shown = switch (_filter) {
           _Filter.all => all,
@@ -129,7 +129,7 @@ class _AlertListScreenState extends State<AlertListScreen> {
                 child: snap.connectionState == ConnectionState.waiting
                     ? const LoadingView()
                     : snap.hasError
-                    ? LoadErrorView(onRetry: _retry)
+                    ? LoadErrorView(onRetry: _retry, server: _repo.isServer)
                     : !snap.hasData
                     ? const LoadingView()
                     : ListView(

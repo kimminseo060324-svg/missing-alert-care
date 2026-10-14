@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../app_routes.dart';
 import '../data/alert_repository.dart';
+import '../data/api_settings.dart';
 import '../models/missing_alert.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../widgets/load_state_view.dart';
 import '../widgets/loading_view.dart';
 import 'lock_screen.dart';
+import 'server_settings_screen.dart';
 
 /// 시연용 첫 화면. 피그마 화면 01~07로 바로 갈 수 있어요.
 /// (푸시 알림이 붙으면 01~03은 진짜 알림으로 바뀌어요.)
@@ -34,7 +36,20 @@ class _DemoMenuScreenState extends State<DemoMenuScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(titleSpacing: 16, title: const Text('기억해줘 · 시연 메뉴')),
+      appBar: AppBar(
+        titleSpacing: 16,
+        title: const Text('기억해줘 · 시연 메뉴'),
+        actions: [
+          TextButton.icon(
+            onPressed: _openSettings,
+            // 남색 제목 줄 위라 흰 글씨로
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
+            icon: const Icon(Icons.dns_outlined, size: 18),
+            label: const Text('서버 주소'),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: FutureBuilder<List<MissingAlert>>(
         future: _future,
         builder: (context, snap) {
@@ -42,13 +57,15 @@ class _DemoMenuScreenState extends State<DemoMenuScreen> {
           if (snap.connectionState == ConnectionState.waiting) {
             return const LoadingView();
           }
-          if (snap.hasError) return LoadErrorView(onRetry: _retry);
+          if (snap.hasError) {
+            return LoadErrorView(onRetry: _retry, server: _repo.isServer);
+          }
           if (!snap.hasData) {
             return const LoadingView();
           }
           final all = snap.data!;
           // 목록이 비었거나 한쪽 상태만 있을 수 있어서 firstWhere 대신 찾기만 해요.
-          final searching = all.where((a) => !a.isFound).firstOrNull;
+          final searching = all.where((a) => a.isSearching).firstOrNull;
           final found = all.where((a) => a.isFound).firstOrNull;
 
           final notice = all.isEmpty
@@ -105,6 +122,13 @@ class _DemoMenuScreenState extends State<DemoMenuScreen> {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
             children: [
+              if (widget.repository == null) ...[
+                Text(
+                  _sourceLabel,
+                  style: appText(12, color: AppColors.gray400),
+                ),
+                const SizedBox(height: 8),
+              ],
               if (notice != null) ...[notice, const SizedBox(height: 12)],
               for (final (no, name, onTap) in items) ...[
                 _MenuTile(no: no, name: name, onTap: onTap),
@@ -115,6 +139,19 @@ class _DemoMenuScreenState extends State<DemoMenuScreen> {
         },
       ),
     );
+  }
+
+  /// 지금 어디서 읽는지 (시연 전에 확인하기 좋게)
+  String get _sourceLabel {
+    final s = ApiSettings.current;
+    return s.useBuiltIn ? '데이터: 앱 안 가짜 데이터' : '데이터: 서버 ${s.baseUrl}';
+  }
+
+  Future<void> _openSettings() async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const ServerSettingsScreen()),
+    );
+    if (changed == true && mounted) _retry();
   }
 
   VoidCallback? _with(MissingAlert? alert, void Function(MissingAlert) go) =>

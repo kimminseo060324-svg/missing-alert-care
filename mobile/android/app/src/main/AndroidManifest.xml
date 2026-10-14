@@ -1,10 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Android 13 이상에서 푸시 알림을 보여 주려면 필요해요 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- 우리 서버에서 경보를 읽어요 -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="기억해줘"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
+        <!-- usesCleartextTraffic: 시연 때 컴퓨터에 켠 로컬 서버(http://)에 접속하려고 켜 둬요.
+             서버를 https로 배포하면 끄세요. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
