@@ -113,6 +113,86 @@ def test_missing_or_bad_key_file_disables_without_leaking(monkeypatch, tmp_path,
     assert str(tmp_path) not in " ".join(logs)
 
 
+# 발송 타임아웃 -------------------------------------------------------------------
+
+@pytest.mark.parametrize("value, expected", [(None, 10), ("", 10), ("abc", 10), ("0", 10), ("121", 10),
+                                             ("5", 5), ("2.5", 2.5), ("120", 120)])
+def test_send_timeout(monkeypatch, value, expected):
+    if value is None:
+        monkeypatch.delenv("FIREBASE_SEND_TIMEOUT_SEC", raising=False)
+    else:
+        monkeypatch.setenv("FIREBASE_SEND_TIMEOUT_SEC", value)
+    assert push.send_timeout() == expected
+
+
+@pytest.fixture
+def fake_key(tmp_path):
+    """가짜 서비스 계정 파일 (테스트용으로 만든 키, 실제 프로젝트와 무관)."""
+    import json
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    pem = rsa.generate_private_key(public_exponent=65537, key_size=2048).private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()
+    path = tmp_path / "fake-key.json"
+    path.write_text(json.dumps({"type": "service_account", "project_id": "fake-project", "private_key_id": "x",
+                                "private_key": pem, "client_email": "fake@fake-project.iam.gserviceaccount.com",
+                                "client_id": "1", "token_uri": "https://oauth2.googleapis.com/token"}))
+    yield path
+    import firebase_admin
+    if push._app:
+        firebase_admin.delete_app(push._app)
+
+
+@pytest.mark.parametrize("env, expected", [(None, 10), ("3", 3)])
+def test_timeout_reaches_sdk_messaging_client(monkeypatch, fake_key, env, expected):
+    from firebase_admin import messaging
+    monkeypatch.setenv("FIREBASE_SERVICE_ACCOUNT_PATH", str(fake_key))
+    if env is None:
+        monkeypatch.delenv("FIREBASE_SEND_TIMEOUT_SEC", raising=False)
+    else:
+        monkeypatch.setenv("FIREBASE_SEND_TIMEOUT_SEC", env)
+    assert push.init() is True
+    assert push._app.options.get("httpTimeout") == expected
+    assert messaging._get_messaging_service(push._app)._client.timeout == expected  # 실제 발송에 쓰는 HTTP 클라이언트
+
+
+def test_timeout_is_failed_and_sync_retries(run, fcm, monkeypatch):
+    from firebase_admin import exceptions
+
+    def slow(title, body, data):
+        raise exceptions.DeadlineExceededError("Timed out while making an API call: SECRET-BODY")
+    run(BASE)
+    monkeypatch.setattr(push, "_send_message", slow)
+    run(BASE + [row(4)])
+    a = run.tracker.alerts[4]
+    assert a["notified"] is False and a["push"] == "issued"  # 재전송 대상 유지
+    assert push.send("issued", {"msspsnIdntfccd": 4}, "수색중") == {
+        "status": "failed", "reason": "응답 시간 초과(10초, DeadlineExceededError(DEADLINE_EXCEEDED))", "message_id": None}
+    monkeypatch.setattr(push, "_send_message", fcm)
+    run(BASE + [row(4)])
+    assert a["notified"] is True and a["push"] is None
+
+
+
+def test_timeout_after_sdk_retry_is_labeled(fcm, monkeypatch):
+    """실제 SDK는 읽기 시간 초과를 한 번 재시도한 뒤 UnavailableError로 감싸서 낸다 (원인: MaxRetryError → ReadTimeoutError)."""
+    import requests
+    import urllib3
+    from firebase_admin import exceptions
+
+    def wrapped(cause):
+        def raise_(title, body, data):
+            raise exceptions.UnavailableError("Failed to establish a connection: SECRET-BODY",
+                                              cause=requests.ConnectionError(cause))
+        return raise_
+    timeout = urllib3.exceptions.MaxRetryError(None, "/x", urllib3.exceptions.ReadTimeoutError(None, "/x", "t"))
+    monkeypatch.setattr(push, "_send_message", wrapped(timeout))
+    res = push.send("issued", {"msspsnIdntfccd": 1}, "수색중")
+    assert res["status"] == "failed" and res["reason"].startswith("응답 시간 초과(10초")
+    refused = urllib3.exceptions.MaxRetryError(None, "/x", urllib3.exceptions.NewConnectionError(None, "refused"))
+    monkeypatch.setattr(push, "_send_message", wrapped(refused))
+    assert push.send("issued", {"msspsnIdntfccd": 1}, "수색중")["reason"] == "UnavailableError(UNAVAILABLE)"
+
 # 시연용 API ------------------------------------------------------------------
 
 def test_fire_sends_once_per_minute(client, fcm):
@@ -138,6 +218,9 @@ def test_found_sends_closed(client, fcm):
     assert res["status"] == "sent"
     title, body, data = fcm.sent[0]
     assert title == "실종경보 종료" and data["event"] == "closed" and data["status"] == "발견완료"
+    again = client.post("/test/found/9990003").json()["push"]
+    assert again["status"] == "skipped" and "60초" in again["reason"]
+    assert len(fcm.sent) == 1
 
 
 def test_end_sends_closed_once_per_minute(client, fcm):

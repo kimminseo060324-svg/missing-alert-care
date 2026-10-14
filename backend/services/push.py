@@ -5,6 +5,11 @@
 - 키 내용, 키 경로, 예외 메시지, 응답 본문은 로그·응답에 넣지 않는다 (예외는 종류와 코드만).
 - 알림 문구와 data에는 실명·상세 주소를 넣지 않는다 (시·군·구, 나이, 성별만).
 - send()는 {"status": "sent"|"skipped"|"failed", "reason", "message_id"}를 돌려준다.
+- 발송 타임아웃은 .env FIREBASE_SEND_TIMEOUT_SEC (기본 10초). firebase-admin 앱 옵션 httpTimeout에
+  초 단위로 넘긴다 (SDK 문서: "httpTimeout ... default timeout of 120 seconds", 인증 토큰 갱신에도 같은 값).
+  SDK가 읽기 시간 초과를 한 번 다시 시도하므로 최악은 약 2배 걸리고, 그 뒤에는 UnavailableError(UNAVAILABLE)로
+  온다 (재시도 없이 끝나면 DeadlineExceededError). 둘 다 원인을 따라가 "응답 시간 초과"로 표시하고 failed로 돌려준다
+  (sync는 재전송 대상으로 남긴다).
 """
 import logging
 import os
@@ -15,6 +20,7 @@ from pathlib import Path
 TOPIC = "missing_alerts_osan"
 CHANNEL_ID = "missing_alerts"
 DATA_VERSION = "1"
+DEFAULT_SEND_TIMEOUT = 10.0  # 초 (FIREBASE_SEND_TIMEOUT_SEC)
 FIRE_DEDUP_SEC = 60  # 시연용 API로 같은 경보·같은 종류(issued/closed)를 이 시간 안에 다시 보내지 않는다
 UNKNOWN_REGION = "지역 미확인"
 GENDER = {"남자": "남성", "여자": "여성", "남": "남성", "여": "여성"}
@@ -35,6 +41,15 @@ _disabled = None  # 끈 이유. None이면 아직 init() 전
 _last_fire = {}  # (식별번호, event) → 마지막 발송 시각 (time.monotonic)
 
 
+def send_timeout():
+    """FIREBASE_SEND_TIMEOUT_SEC (1~120초). 비었거나 숫자가 아니거나 범위 밖이면 기본 10초."""
+    try:
+        sec = float((os.getenv("FIREBASE_SEND_TIMEOUT_SEC") or "").strip())
+    except ValueError:
+        return DEFAULT_SEND_TIMEOUT
+    return sec if 1 <= sec <= 120 else DEFAULT_SEND_TIMEOUT
+
+
 def init():
     """한 번만 준비한다. 성공하면 True. 실패하면 이유를 남기고 False (다시 시도하지 않음)."""
     global _app, _disabled
@@ -51,11 +66,11 @@ def init():
                 import firebase_admin
                 from firebase_admin import credentials
                 cred = credentials.Certificate(str(Path(path).expanduser()))
-                _app = firebase_admin.initialize_app(cred, name="missing-alert-push")
+                _app = firebase_admin.initialize_app(cred, {"httpTimeout": send_timeout()}, name="missing-alert-push")
             except Exception as e:  # 메시지에 키 일부가 담길 수 있어 종류만 쓴다
                 _disabled = f"키 파일을 읽지 못해 푸시를 끕니다 ({type(e).__name__})"
         if _app:
-            log.info("FCM 푸시 준비 완료 (토픽 %s)", TOPIC)
+            log.info("FCM 푸시 준비 완료 (토픽 %s, 발송 타임아웃 %g초)", TOPIC, send_timeout())
             return True
         log.warning(_disabled)
         return False
@@ -120,6 +135,25 @@ def _send_message(title, body, data):
     return messaging.send(msg, app=_app)
 
 
+def _is_timeout(e):
+    """FCM 예외가 시간 초과 때문인지. firebase 예외 → requests 예외 → urllib3 MaxRetryError 순으로 원인을 따라간다."""
+    import requests
+    import urllib3
+    for _ in range(5):
+        if e is None:
+            return False
+        if isinstance(e, urllib3.exceptions.NewConnectionError):  # 연결 거부. urllib3에서 TimeoutError 하위라 먼저 뺀다
+            return False
+        if getattr(e, "code", None) == "DEADLINE_EXCEEDED" or isinstance(e, (requests.Timeout, urllib3.exceptions.TimeoutError)):
+            return True
+        if isinstance(e, urllib3.exceptions.MaxRetryError):
+            e = e.reason
+            continue
+        inner = e.args[0] if e.args and isinstance(e.args[0], BaseException) else None
+        e = getattr(e, "cause", None) or e.__cause__ or inner
+    return False
+
+
 def send(event, raw, status, dedup=False):
     """event: "issued" | "closed". dedup=True면 같은 경보·같은 event를 FIRE_DEDUP_SEC 안에 다시 보내지 않는다."""
     key = (raw.get("msspsnIdntfccd"), event)
@@ -136,6 +170,8 @@ def send(event, raw, status, dedup=False):
     except Exception as e:  # 예외 메시지에 응답 본문이 담길 수 있어 종류·코드만 쓴다
         code = getattr(e, "code", None)
         reason = f"{type(e).__name__}({code})" if code else type(e).__name__
+        if _is_timeout(e):
+            reason = f"응답 시간 초과({send_timeout():g}초, {reason})"
         log.warning("푸시 %s 발송 실패: %s", event, reason)
         return {"status": "failed", "reason": reason, "message_id": None}
     if dedup:

@@ -145,7 +145,7 @@ def test_found(sid: int):
     _find(sid)
     _state.setdefault(sid, {}).update(status=Status.found.value, found_at=_now(), ended_at=None)
     item = _enrich(_find(sid))
-    return {**item, "push": push.send("closed", item, item["status"])}
+    return {**item, "push": push.send("closed", item, item["status"], dedup=True)}
 
 
 @router.post("/test/end/{sid}", tags=["test"], summary="시연용: 경보종료로 바꾸기",
