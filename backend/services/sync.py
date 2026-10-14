@@ -17,7 +17,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from services import push, safe182
+from services import ai_features, push, safe182
 
 KST = timezone(timedelta(hours=9))
 DEFAULT_INTERVAL, MIN_INTERVAL = 300, 60
@@ -279,6 +279,7 @@ def poll_once(tracker, api_id, api_key, failures, now=None, fetch=safe182.fetch_
         log.warning("받은 건수 %d ≠ totalCount %d — 이번 회차는 비교에 쓰지 않습니다", received, total)
         return INTERVAL, 0
     new, ch = tracker.update(rows, now)
+    ai_features.submit(new)  # 옷차림 추출은 기다리지 않음 (safe182는 기본 꺼짐)
     log.info("조회 완료: 전체 %d건 | 기준 %d, 신규 %d, 오래된 새 번호 %d, 종료후보 %d, 경보종료 %d, 복구 %d | 오늘 호출 %d회",
              len(rows), ch["baseline"], ch["new"], ch["old"], ch["candidate"], ch["ended"], ch["restored"],
              tracker.calls["count"])

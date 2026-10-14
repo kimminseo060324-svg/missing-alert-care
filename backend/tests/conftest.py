@@ -7,6 +7,7 @@ from pathlib import Path
 # (load_dotenv는 이미 있는 환경변수를 덮어쓰지 않으므로 이 값이 유지된다)
 os.environ["DATA_SOURCE"] = "sample"
 os.environ["FIREBASE_SERVICE_ACCOUNT_PATH"] = ""  # 테스트에서 실제 푸시를 보내지 않게 끈다
+os.environ["GEMINI_API_KEY"] = ""  # 테스트에서 실제 Gemini를 부르지 않게 끈다 (AI 테스트는 가짜 함수로)
 
 import pytest
 
