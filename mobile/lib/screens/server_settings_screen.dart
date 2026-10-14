@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../data/alert_repository.dart';
@@ -13,6 +15,17 @@ class ServerSettingsScreen extends StatefulWidget {
 
   @override
   State<ServerSettingsScreen> createState() => _ServerSettingsScreenState();
+}
+
+/// 연결 확인에 실패했을 때 보여 줄 짧은 안내. 긴 오류 문장은 보여 주지 않아요.
+String connectFailText(Object error) {
+  if (error is ServerException) {
+    return '연결하지 못했어요. 서버가 오류를 보냈어요. (${error.statusCode})';
+  }
+  if (error is TimeoutException) {
+    return '연결하지 못했어요. 서버 응답이 너무 늦어요.';
+  }
+  return '연결하지 못했어요. 서버가 켜져 있는지, 주소가 맞는지 확인해 주세요.';
 }
 
 class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
@@ -51,7 +64,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
       final alerts = await AlertRepository.server(url).loadAll();
       result = '연결됐어요. 경보 ${alerts.length}건을 받았어요.';
     } catch (e) {
-      result = '연결하지 못했어요. ($e)';
+      result = connectFailText(e);
     }
     if (!mounted) return;
     setState(() {

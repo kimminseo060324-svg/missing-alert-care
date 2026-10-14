@@ -63,7 +63,6 @@ assets/
 ## 아직 안 한 것
 
 - 182 전화 연결 (지금은 안내 메시지만 떠요), 지도, AI 옷차림 그림·상의·하의 표시 (서버에 붙으면 표시)
-- 앱을 보고 있는 중에 온 푸시를 화면 위에 띄우기 (지금은 앱이 백그라운드이거나 꺼져 있을 때만 알림이 떠요)
 
 ## 서버 연결
 
@@ -91,5 +90,7 @@ assets/
 
 - 토픽 `missing_alerts_osan`을 구독해요. 알림 채널 id는 `missing_alerts`예요 (`MainActivity.kt`에서 만들어요).
 - 서버가 보내는 data: `type`(`missing_alert`), `event`(`issued`/`closed`), `alert_id`(경찰청 식별번호), `status`, `region`, `version`, `lat`/`lng`(있을 때만). 값은 전부 문자열이에요.
+- 앱을 보고 있을 때 온 푸시는 Android가 띄우지 않아서 앱이 같은 채널로 직접 띄워요(`flutter_local_notifications`). 백그라운드이거나 꺼져 있을 때는 Android가 띄우고 앱은 띄우지 않아서 두 번 뜨지 않아요.
+- 같은 경보의 알림은 tag `alert_{alert_id}`가 같아요. 경보 종료·발견 완료 알림이 오면 앞의 "찾고 있어요" 알림을 바꿔치기해요. 백그라운드에서도 바꿔치기되려면 서버가 같은 tag를 넣어 보내야 해요.
 - 알림을 누르면 `alert_id`로 서버에서 그 경보의 최신 정보(`GET /alerts/{id}`)를 받아 05 상세(발견 완료면 07)를 열고, 서버에 없으면(404) 04 목록을 열어요.
 - 확인: Firebase 콘솔 → Messaging → 새 캠페인 → 알림 → 대상을 주제 `missing_alerts_osan`으로, 추가 옵션의 맞춤 데이터에 `type`=`missing_alert`, `alert_id`=`9990001`을 넣고 보내요.
