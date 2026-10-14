@@ -20,6 +20,7 @@ from services import safe182
 
 KST = timezone(timedelta(hours=9))
 DEFAULT_INTERVAL, MIN_INTERVAL = 300, 60
+MAX_INTERVAL = 86400  # 하루. 너무 큰 대기 시간은 플랫폼에 따라 Event.wait()에서 OverflowError가 난다
 INTERVAL = DEFAULT_INTERVAL  # start()에서 .env의 SAFE182_SYNC_INTERVAL_SEC로 다시 정한다
 BACKOFF = [60, 300, 900]  # 실패가 이어질 때 다시 시도하기까지 기다리는 초
 DAILY_LIMIT = 1000
@@ -265,7 +266,10 @@ def poll_once(tracker, api_id, api_key, failures, now=None, fetch=safe182.fetch_
 
 
 def read_interval(value):
-    """SAFE182_SYNC_INTERVAL_SEC 값 → (쓸 간격 초, 설명). 비었거나 숫자가 아니거나 0 이하면 기본값, 60초 미만이면 60초."""
+    """SAFE182_SYNC_INTERVAL_SEC 값 → (쓸 간격 초, 설명).
+
+    비었거나 숫자가 아니거나 0 이하면 기본값, 60초 미만이면 60초, 하루(86400초) 초과면 86400초.
+    """
     text = (value or "").strip()
     try:
         sec = int(text)
@@ -275,6 +279,8 @@ def read_interval(value):
         return DEFAULT_INTERVAL, "0 이하라서 기본값 사용"
     if sec < MIN_INTERVAL:
         return MIN_INTERVAL, f"{MIN_INTERVAL}초보다 짧아 {MIN_INTERVAL}초로 올림"
+    if sec > MAX_INTERVAL:
+        return MAX_INTERVAL, f"하루({MAX_INTERVAL}초)보다 길어 {MAX_INTERVAL}초로 내림"
     return sec, ".env 설정값"
 
 
