@@ -1,0 +1,1349 @@
+{
+  "color_rule": "color는 표준색, color_text는 문자에 적힌 표현. 곤색·네이비·남색은 '남색', 청색은 남색과 다른 색. 표준표에 없는 색은 가장 가까운 표준색으로 둔다: 와인색 → '자주색', 아이보리 → '베이지색', 연두 → '초록색', 살색 → '베이지색' (밤색은 표준표에서 '갈색'). 색이 적혀 있지 않으면 color·color_text를 비우고 색 채점에서 뺀다.",
+  "labels": [
+    {
+      "SN": 9910001,
+      "is_missing": true,
+      "name": "박예시",
+      "sex": "남",
+      "age": 82,
+      "height_cm": 168,
+      "weight_kg": 58,
+      "missing_place": {
+        "sido": "경기도",
+        "sigungu": "수원시 영통구",
+        "dong": "매탄동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "후드티",
+          "color": "회색",
+          "color_text": "그레이"
+        },
+        {
+          "part": "하의",
+          "item": "트레이닝 바지",
+          "color": "검정",
+          "color_text": "검정"
+        },
+        {
+          "part": "신발",
+          "item": "운동화",
+          "color": "흰색",
+          "color_text": "흰"
+        }
+      ],
+      "not_wearing": [],
+      "features": [
+        "흰머리",
+        "배회"
+      ],
+      "report_number": "182",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "실제형식",
+        "영어색",
+        "줄임말"
+      ]
+    },
+    {
+      "SN": 9910002,
+      "is_missing": true,
+      "name": "최샘플",
+      "sex": "남",
+      "age": 76,
+      "height_cm": null,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "경기도",
+        "sigungu": "오산시",
+        "dong": "궐동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "점퍼",
+          "color": "남색",
+          "color_text": "남색"
+        },
+        {
+          "part": "하의",
+          "item": "면바지",
+          "color": "베이지색",
+          "color_text": "베이지"
+        },
+        {
+          "part": "신발",
+          "item": "운동화",
+          "color": "검정",
+          "color_text": "검정"
+        }
+      ],
+      "not_wearing": [],
+      "features": [],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "오타"
+      ]
+    },
+    {
+      "SN": 9910003,
+      "is_missing": true,
+      "name": "이가명",
+      "sex": "여",
+      "age": 81,
+      "height_cm": 152,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "경기도",
+        "sigungu": "화성시 병점구",
+        "dong": "병점동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "가디건",
+          "color": "자주색",
+          "color_text": "와인색"
+        },
+        {
+          "part": "상의",
+          "item": "블라우스",
+          "color": "흰색",
+          "color_text": "흰"
+        },
+        {
+          "part": "하의",
+          "item": "7부 바지",
+          "color": "검정",
+          "color_text": "검정"
+        },
+        {
+          "part": "신발",
+          "item": "단화",
+          "color": "갈색",
+          "color_text": "갈색"
+        }
+      ],
+      "not_wearing": [],
+      "features": [
+        "마른체형",
+        "파마머리"
+      ],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "붙여쓰기",
+        "겹쳐입음"
+      ]
+    },
+    {
+      "SN": 9910004,
+      "is_missing": true,
+      "name": "정예제",
+      "sex": "남",
+      "age": 85,
+      "height_cm": null,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "경기도",
+        "sigungu": "성남시 분당구",
+        "dong": "정자동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "반소매 티셔츠",
+          "color": "베이지색",
+          "color_text": "베이지"
+        },
+        {
+          "part": "하의",
+          "item": "트레이닝 바지",
+          "color": "회색",
+          "color_text": "회색"
+        },
+        {
+          "part": "신발",
+          "item": "슬리퍼",
+          "color": null,
+          "color_text": null
+        }
+      ],
+      "not_wearing": [
+        "안경",
+        "모자"
+      ],
+      "features": [
+        "대머리"
+      ],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "부정표현",
+        "줄임말"
+      ]
+    },
+    {
+      "SN": 9910005,
+      "is_missing": true,
+      "name": "한모의",
+      "sex": "여",
+      "age": 79,
+      "height_cm": 155,
+      "weight_kg": 50,
+      "missing_place": {
+        "sido": "경기도",
+        "sigungu": "용인시 수지구",
+        "dong": "풍덕천동"
+      },
+      "clothing": [],
+      "not_wearing": [],
+      "features": [
+        "짧은 흰머리"
+      ],
+      "report_number": "182",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "옷없음",
+        "실제형식"
+      ]
+    },
+    {
+      "SN": 9910006,
+      "is_missing": true,
+      "name": "윤가짜",
+      "sex": "남",
+      "age": 17,
+      "height_cm": 175,
+      "weight_kg": 62,
+      "missing_place": {
+        "sido": "경기도",
+        "sigungu": "평택시",
+        "dong": "비전동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "트레이닝 상의",
+          "color": "검정",
+          "color_text": "검정"
+        },
+        {
+          "part": "하의",
+          "item": "트레이닝 바지",
+          "color": "검정",
+          "color_text": "검정"
+        },
+        {
+          "part": "신발",
+          "item": "슬리퍼",
+          "color": "검정",
+          "color_text": "검은"
+        },
+        {
+          "part": "착용품",
+          "item": "백팩",
+          "color": "검정",
+          "color_text": "검정"
+        }
+      ],
+      "not_wearing": [],
+      "features": [],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "줄임말"
+      ]
+    },
+    {
+      "SN": 9910007,
+      "is_missing": true,
+      "name": "서임시",
+      "sex": "남",
+      "age": 9,
+      "height_cm": 130,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "경기도",
+        "sigungu": "안산시 단원구",
+        "dong": "고잔동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "반소매 티셔츠",
+          "color": "노란색",
+          "color_text": "노란"
+        },
+        {
+          "part": "하의",
+          "item": "반바지",
+          "color": "파란색",
+          "color_text": "파란"
+        },
+        {
+          "part": "신발",
+          "item": "크록스",
+          "color": "초록색",
+          "color_text": "초록"
+        },
+        {
+          "part": "착용품",
+          "item": "책가방",
+          "color": "주황색",
+          "color_text": "주황색"
+        }
+      ],
+      "not_wearing": [],
+      "features": [],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "줄임말"
+      ]
+    },
+    {
+      "SN": 9910008,
+      "is_missing": true,
+      "name": "강테스트",
+      "sex": "여",
+      "age": 34,
+      "height_cm": 160,
+      "weight_kg": 52,
+      "missing_place": {
+        "sido": "경기도",
+        "sigungu": "부천시",
+        "dong": "중동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "니트",
+          "color": "베이지색",
+          "color_text": "아이보리"
+        },
+        {
+          "part": "하의",
+          "item": "롱스커트",
+          "color": "검정",
+          "color_text": "블랙"
+        },
+        {
+          "part": "신발",
+          "item": "스니커즈",
+          "color": "흰색",
+          "color_text": "화이트"
+        },
+        {
+          "part": "착용품",
+          "item": "숄더백",
+          "color": "갈색",
+          "color_text": "갈색"
+        }
+      ],
+      "not_wearing": [],
+      "features": [
+        "긴생머리"
+      ],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "영어색"
+      ]
+    },
+    {
+      "SN": 9910009,
+      "is_missing": true,
+      "name": "구가상",
+      "sex": "남",
+      "age": 74,
+      "height_cm": 180,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "경기도",
+        "sigungu": "시흥시",
+        "dong": "정왕동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "패딩",
+          "color": "회색",
+          "color_text": "회색"
+        },
+        {
+          "part": "신발",
+          "item": "등산화",
+          "color": null,
+          "color_text": null
+        }
+      ],
+      "not_wearing": [],
+      "features": [
+        "덩치 큼",
+        "지팡이 사용"
+      ],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": []
+    },
+    {
+      "SN": 9910010,
+      "is_missing": true,
+      "name": "장예문",
+      "sex": "여",
+      "age": 78,
+      "height_cm": null,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "경기도",
+        "sigungu": "고양시 일산동구",
+        "dong": "마두동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "체크무늬 셔츠",
+          "color": null,
+          "color_text": null
+        },
+        {
+          "part": "하의",
+          "item": "바지",
+          "color": "남색",
+          "color_text": "곤색"
+        },
+        {
+          "part": "신발",
+          "item": "구두",
+          "color": "검정",
+          "color_text": "검정"
+        },
+        {
+          "part": "착용품",
+          "item": "금테 안경",
+          "color": null,
+          "color_text": null
+        },
+        {
+          "part": "모자",
+          "item": "벙거지 모자",
+          "color": "베이지색",
+          "color_text": "베이지"
+        }
+      ],
+      "not_wearing": [],
+      "features": [],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": []
+    },
+    {
+      "SN": 9910011,
+      "is_missing": true,
+      "name": "나예시",
+      "sex": "여",
+      "age": 26,
+      "height_cm": 158,
+      "weight_kg": 48,
+      "missing_place": {
+        "sido": "경기도",
+        "sigungu": "의정부시",
+        "dong": "호원동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "후드집업",
+          "color": "회색",
+          "color_text": "회색"
+        },
+        {
+          "part": "상의",
+          "item": "티셔츠",
+          "color": "흰색",
+          "color_text": "흰"
+        },
+        {
+          "part": "하의",
+          "item": "7부 청바지",
+          "color": null,
+          "color_text": null
+        },
+        {
+          "part": "신발",
+          "item": "슬리퍼",
+          "color": "분홍색",
+          "color_text": "분홍"
+        }
+      ],
+      "not_wearing": [],
+      "features": [
+        "단발머리"
+      ],
+      "report_number": "182",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "실제형식",
+        "겹쳐입음",
+        "줄임말"
+      ]
+    },
+    {
+      "SN": 9910012,
+      "is_missing": true,
+      "name": "문견본",
+      "sex": "남",
+      "age": 88,
+      "height_cm": 167,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "경기도",
+        "sigungu": "남양주시",
+        "dong": "다산동"
+      },
+      "clothing": [],
+      "not_wearing": [],
+      "features": [
+        "마른체형",
+        "치매"
+      ],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "옷없음"
+      ]
+    },
+    {
+      "SN": 9910013,
+      "is_missing": true,
+      "name": "신모형",
+      "sex": "남",
+      "age": 69,
+      "height_cm": null,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "경기도",
+        "sigungu": "이천시",
+        "dong": "창전동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "작업복 상의",
+          "color": "회색",
+          "color_text": "회색"
+        },
+        {
+          "part": "하의",
+          "item": "작업복 바지",
+          "color": "회색",
+          "color_text": "회색"
+        },
+        {
+          "part": "신발",
+          "item": "장화",
+          "color": "검정",
+          "color_text": "검정"
+        },
+        {
+          "part": "착용품",
+          "item": "목장갑",
+          "color": "흰색",
+          "color_text": "흰"
+        }
+      ],
+      "not_wearing": [],
+      "features": [],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "줄임말"
+      ]
+    },
+    {
+      "SN": 9910014,
+      "is_missing": true,
+      "name": "조연습",
+      "sex": "여",
+      "age": 83,
+      "height_cm": 150,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "경기도",
+        "sigungu": "김포시",
+        "dong": "구래동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "조끼",
+          "color": "하늘색",
+          "color_text": "하늘색"
+        },
+        {
+          "part": "하의",
+          "item": "꽃무늬 몸빼바지",
+          "color": "보라색",
+          "color_text": "보라색"
+        },
+        {
+          "part": "신발",
+          "item": "고무신",
+          "color": "흰색",
+          "color_text": "흰"
+        }
+      ],
+      "not_wearing": [
+        "안경"
+      ],
+      "features": [],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "부정표현"
+      ]
+    },
+    {
+      "SN": 9910015,
+      "is_missing": true,
+      "name": "유시험",
+      "sex": "남",
+      "age": 45,
+      "height_cm": null,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "경기도",
+        "sigungu": "광명시",
+        "dong": "철산동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "롱패딩",
+          "color": "검정",
+          "color_text": "검정"
+        },
+        {
+          "part": "상의",
+          "item": "맨투맨",
+          "color": "회색",
+          "color_text": "그레이"
+        },
+        {
+          "part": "하의",
+          "item": "트레이닝 바지",
+          "color": "남색",
+          "color_text": "남색"
+        },
+        {
+          "part": "신발",
+          "item": "운동화",
+          "color": "흰색",
+          "color_text": "흰"
+        },
+        {
+          "part": "착용품",
+          "item": "휴대폰",
+          "color": null,
+          "color_text": null
+        }
+      ],
+      "not_wearing": [
+        "모자"
+      ],
+      "features": [
+        "짧은머리"
+      ],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "겹쳐입음",
+        "부정표현",
+        "붙여쓰기",
+        "영어색"
+      ]
+    },
+    {
+      "SN": 9910016,
+      "is_missing": true,
+      "name": "도샘플",
+      "sex": "남",
+      "age": 79,
+      "height_cm": null,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "경기도",
+        "sigungu": "수원시 영통구",
+        "dong": "영통동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "점퍼",
+          "color": "남색",
+          "color_text": "남색"
+        },
+        {
+          "part": "하의",
+          "item": "바지",
+          "color": "회색",
+          "color_text": "회색"
+        },
+        {
+          "part": "신발",
+          "item": "운동화",
+          "color": "검정",
+          "color_text": "검정"
+        }
+      ],
+      "not_wearing": [],
+      "features": [
+        "흰머리"
+      ],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "실종표현변형",
+        "착용긍정"
+      ]
+    },
+    {
+      "SN": 9910017,
+      "is_missing": true,
+      "name": "마더미",
+      "sex": "여",
+      "age": 83,
+      "height_cm": 150,
+      "weight_kg": 45,
+      "missing_place": {
+        "sido": "충청북도",
+        "sigungu": "청주시 흥덕구",
+        "dong": "복대동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "트레이닝 상의",
+          "color": "회색",
+          "color_text": "회색"
+        },
+        {
+          "part": "하의",
+          "item": "트레이닝 바지",
+          "color": "회색",
+          "color_text": "회색"
+        },
+        {
+          "part": "신발",
+          "item": "슬리퍼",
+          "color": null,
+          "color_text": null
+        }
+      ],
+      "not_wearing": [],
+      "features": [
+        "치매",
+        "지팡이 사용"
+      ],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "줄임말"
+      ]
+    },
+    {
+      "SN": 9910018,
+      "is_missing": true,
+      "name": "이테스트",
+      "sex": "남",
+      "age": 72,
+      "height_cm": 170,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "전북특별자치도",
+        "sigungu": "전주시 완산구",
+        "dong": "효자동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "가디건",
+          "color": "베이지색",
+          "color_text": "베이지색"
+        },
+        {
+          "part": "하의",
+          "item": "슬랙스",
+          "color": "검정",
+          "color_text": "검정"
+        },
+        {
+          "part": "신발",
+          "item": "구두",
+          "color": "갈색",
+          "color_text": "갈색"
+        },
+        {
+          "part": "착용품",
+          "item": "안경",
+          "color": null,
+          "color_text": null
+        }
+      ],
+      "not_wearing": [],
+      "features": [
+        "대머리"
+      ],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "착용긍정",
+        "오타",
+        "붙여쓰기"
+      ]
+    },
+    {
+      "SN": 9910019,
+      "is_missing": true,
+      "name": "정가짜",
+      "sex": "남",
+      "age": 81,
+      "height_cm": null,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "경상남도",
+        "sigungu": "창원시 성산구",
+        "dong": "상남동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "점퍼",
+          "color": "카키색",
+          "color_text": "카키"
+        },
+        {
+          "part": "하의",
+          "item": "하의",
+          "color": "남색",
+          "color_text": "곤색"
+        },
+        {
+          "part": "신발",
+          "item": "운동화",
+          "color": "검정",
+          "color_text": "검정"
+        }
+      ],
+      "not_wearing": [],
+      "features": [
+        "흰머리",
+        "마른체형"
+      ],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "실종표현변형",
+        "슬래시구분",
+        "오타"
+      ]
+    },
+    {
+      "SN": 9910020,
+      "is_missing": true,
+      "name": "김연습",
+      "sex": "남",
+      "age": 9,
+      "height_cm": 135,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "경기도",
+        "sigungu": "부천시",
+        "dong": "중동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "반소매 티셔츠",
+          "color": "노란색",
+          "color_text": "노랑"
+        },
+        {
+          "part": "하의",
+          "item": "청반바지",
+          "color": null,
+          "color_text": null
+        },
+        {
+          "part": "신발",
+          "item": "크록스",
+          "color": "파란색",
+          "color_text": "파랑"
+        },
+        {
+          "part": "착용품",
+          "item": "책가방",
+          "color": "초록색",
+          "color_text": "초록"
+        }
+      ],
+      "not_wearing": [],
+      "features": [
+        "마른체형"
+      ],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "줄임말"
+      ]
+    },
+    {
+      "SN": 9910021,
+      "is_missing": true,
+      "name": "윤더미",
+      "sex": "여",
+      "age": 77,
+      "height_cm": 155,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "대구광역시",
+        "sigungu": "수성구",
+        "dong": "범어동"
+      },
+      "clothing": [],
+      "not_wearing": [],
+      "features": [
+        "단발머리",
+        "흰머리"
+      ],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "옷없음"
+      ]
+    },
+    {
+      "SN": 9910022,
+      "is_missing": true,
+      "name": "변가명",
+      "sex": "남",
+      "age": 24,
+      "height_cm": 180,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "전남광주통합특별시",
+        "sigungu": "광산구",
+        "dong": "첨단동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "후드티",
+          "color": "자주색",
+          "color_text": "와인색"
+        },
+        {
+          "part": "하의",
+          "item": "조거팬츠",
+          "color": "검정",
+          "color_text": "검정"
+        },
+        {
+          "part": "신발",
+          "item": "신발",
+          "color": "흰색",
+          "color_text": "흰"
+        }
+      ],
+      "not_wearing": [
+        "모자",
+        "가방"
+      ],
+      "features": [
+        "지적장애",
+        "덩치 큼"
+      ],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "부정기호",
+        "붙여쓰기",
+        "줄임말"
+      ]
+    },
+    {
+      "SN": 9910023,
+      "is_missing": true,
+      "name": "송샘플",
+      "sex": "여",
+      "age": 68,
+      "height_cm": null,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "인천광역시",
+        "sigungu": "남동구",
+        "dong": "구월동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "니트",
+          "color": "회색",
+          "color_text": "그레이색"
+        },
+        {
+          "part": "하의",
+          "item": "7부 바지",
+          "color": "베이지색",
+          "color_text": "베이지"
+        },
+        {
+          "part": "신발",
+          "item": "단화",
+          "color": "검정",
+          "color_text": "검은"
+        },
+        {
+          "part": "착용품",
+          "item": "꽃무늬 손가방",
+          "color": null,
+          "color_text": null
+        }
+      ],
+      "not_wearing": [],
+      "features": [
+        "갈색 염색 머리"
+      ],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "실종표현변형",
+        "영어색"
+      ]
+    },
+    {
+      "SN": 9910024,
+      "is_missing": true,
+      "name": "장예제",
+      "sex": "남",
+      "age": 85,
+      "height_cm": 162,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "대전광역시",
+        "sigungu": "서구",
+        "dong": "둔산동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "체크무늬 남방",
+          "color": null,
+          "color_text": null
+        },
+        {
+          "part": "하의",
+          "item": "바지",
+          "color": "갈색",
+          "color_text": "밤색"
+        },
+        {
+          "part": "신발",
+          "item": "털신",
+          "color": "회색",
+          "color_text": "회색"
+        }
+      ],
+      "not_wearing": [
+        "안경"
+      ],
+      "features": [
+        "흰머리"
+      ],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "슬래시구분",
+        "부정표현"
+      ]
+    },
+    {
+      "SN": 9910025,
+      "is_missing": true,
+      "name": "임가명",
+      "sex": "남",
+      "age": 15,
+      "height_cm": 172,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "경기도",
+        "sigungu": "고양시 덕양구",
+        "dong": "화정동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "롱패딩",
+          "color": "검정",
+          "color_text": "검정"
+        },
+        {
+          "part": "하의",
+          "item": "청바지",
+          "color": null,
+          "color_text": null
+        },
+        {
+          "part": "신발",
+          "item": "운동화",
+          "color": "흰색",
+          "color_text": "흰"
+        },
+        {
+          "part": "착용품",
+          "item": "백팩",
+          "color": "검정",
+          "color_text": "검정"
+        }
+      ],
+      "not_wearing": [],
+      "features": [
+        "투블럭 머리",
+        "마른체형"
+      ],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "실종표현변형",
+        "붙여쓰기"
+      ]
+    },
+    {
+      "SN": 9910026,
+      "is_missing": true,
+      "name": "신테스트",
+      "sex": "남",
+      "age": 76,
+      "height_cm": null,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "울산광역시",
+        "sigungu": "남구",
+        "dong": "삼산동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "조끼",
+          "color": "빨간색",
+          "color_text": "빨간"
+        },
+        {
+          "part": "하의",
+          "item": "등산바지",
+          "color": "검정",
+          "color_text": "검정"
+        },
+        {
+          "part": "신발",
+          "item": "등산화",
+          "color": null,
+          "color_text": null
+        },
+        {
+          "part": "모자",
+          "item": "모자",
+          "color": "베이지색",
+          "color_text": "베이지"
+        },
+        {
+          "part": "착용품",
+          "item": "마스크",
+          "color": "흰색",
+          "color_text": "흰"
+        }
+      ],
+      "not_wearing": [],
+      "features": [],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "실종표현변형",
+        "착용긍정"
+      ]
+    },
+    {
+      "SN": 9910027,
+      "is_missing": true,
+      "name": "석연습",
+      "sex": "여",
+      "age": 80,
+      "height_cm": 150,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "충청남도",
+        "sigungu": "천안시 서북구",
+        "dong": "불당동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "가디건",
+          "color": "초록색",
+          "color_text": "연두"
+        },
+        {
+          "part": "하의",
+          "item": "꽃무늬 몸빼바지",
+          "color": null,
+          "color_text": null
+        },
+        {
+          "part": "신발",
+          "item": "고무신",
+          "color": "검정",
+          "color_text": "검정"
+        }
+      ],
+      "not_wearing": [],
+      "features": [
+        "쪽진 흰머리",
+        "치매"
+      ],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "오타",
+        "줄임말"
+      ]
+    },
+    {
+      "SN": 9910028,
+      "is_missing": true,
+      "name": "배샘플",
+      "sex": "남",
+      "age": 88,
+      "height_cm": null,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "경상북도",
+        "sigungu": "포항시 북구",
+        "dong": "양덕동"
+      },
+      "clothing": [],
+      "not_wearing": [],
+      "features": [
+        "거동불편",
+        "보행보조기 사용"
+      ],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "보조기구만",
+        "옷없음"
+      ]
+    },
+    {
+      "SN": 9910029,
+      "is_missing": true,
+      "name": "유가상",
+      "sex": "남",
+      "age": 70,
+      "height_cm": null,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "경상남도",
+        "sigungu": "김해시",
+        "dong": "내외동"
+      },
+      "clothing": [
+        {
+          "part": "상의",
+          "item": "반소매 셔츠",
+          "color": "하늘색",
+          "color_text": "하늘색"
+        },
+        {
+          "part": "하의",
+          "item": "면바지",
+          "color": "베이지색",
+          "color_text": "베이지"
+        },
+        {
+          "part": "신발",
+          "item": "샌들",
+          "color": "갈색",
+          "color_text": "갈색"
+        }
+      ],
+      "not_wearing": [
+        "보청기",
+        "모자"
+      ],
+      "features": [
+        "대머리"
+      ],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "붙여쓰기",
+        "부정표현",
+        "오타"
+      ]
+    },
+    {
+      "SN": 9910030,
+      "is_missing": true,
+      "name": "노연습",
+      "sex": "여",
+      "age": 74,
+      "height_cm": 153,
+      "weight_kg": null,
+      "missing_place": {
+        "sido": "경기도",
+        "sigungu": "용인시 수지구",
+        "dong": "풍덕천동"
+      },
+      "clothing": [
+        {
+          "part": "전신",
+          "item": "꽃무늬 원피스",
+          "color": "남색",
+          "color_text": "남색"
+        },
+        {
+          "part": "하의",
+          "item": "스타킹",
+          "color": "베이지색",
+          "color_text": "살색"
+        },
+        {
+          "part": "신발",
+          "item": "구두",
+          "color": "검정",
+          "color_text": "검정"
+        },
+        {
+          "part": "착용품",
+          "item": "우산",
+          "color": "빨간색",
+          "color_text": "빨간"
+        }
+      ],
+      "not_wearing": [],
+      "features": [
+        "단발머리",
+        "흰머리"
+      ],
+      "report_number": "112",
+      "linked_msspsnIdntfccd": null,
+      "hard_cases": [
+        "일체형"
+      ]
+    }
+  ]
+}
