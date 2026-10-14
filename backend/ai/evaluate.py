@@ -9,14 +9,16 @@
 - 전체 필드: 문자 하나의 옷 3칸(종류, 채점하는 색), 소지품, 부정 표현이 모두 맞으면 정답.
 - 환각: 결과에 넣은 항목(옷 칸·소지품·부정 표현, 그리고 정답에 색이 없는 칸에 붙인 색) 중
   정답에 없는 것의 비율. 낮을수록 좋다. 색을 채점에서 빼는 칸이라도 색을 지어내면 여기서 잡는다.
-- 요약 근거 없음: summary 중 원문에 없는 문구의 비율 (summary는 정답이 없어 근거만 본다).
+- 요약 옷·소지품 일치: summary 문구 중 정답의 옷·소지품 항목(상의·하의·신발·소지품 종류)을 가리키는 것의 비율.
+  summary는 정답이 따로 없어서, 길에서 알아볼 옷·소지품을 짚었는지로 본다. 나이·성별·키처럼 옷·소지품이 아닌 문구나
+  정답에 없는 항목을 짚은 문구는 맞지 않는 것으로 센다. 표현이 달라도(남색잠퍼 ↔ 남색 점퍼) 같은 항목이면 맞다고 본다.
 """
 import json
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from .schema import SLOTS, canonical_type, grounded, normalize_color
+from .schema import SLOTS, canonical_type, normalize_color, type_in_evidence
 
 RESULTS_DIR = Path(__file__).resolve().parents[2] / "results"
 
@@ -42,7 +44,7 @@ def _match_list(pred, gold, key=lambda x: x):
     return pairs, extra, rest_gold
 
 
-def compare(pred, gold, text=""):
+def compare(pred, gold):
     """문자 하나 비교. 필드별 맞음 여부와 환각 수를 돌려준다."""
     r = {"slots": {}, "hallucinated": 0, "predicted": 0, "summary_total": 0, "summary_ungrounded": 0}
     def invented_color(p_color, g_color):  # 정답에 색이 없는데 색을 붙였는가
@@ -76,15 +78,16 @@ def compare(pred, gold, text=""):
     r["hallucinated"] += len(extra_n)
 
     r["all"] = all(v["type"] and v["color"] is not False for v in r["slots"].values()) and r["accessories"] and r["negatives"]
-    r["summary_total"] = len(pred.get("summary") or [])
-    r["summary_ungrounded"] = sum(not grounded(s, text) for s in pred.get("summary") or [])
+    gold_items = [gold[s]["type"] for s in SLOTS if gold[s]["type"]] + [a["type"] for a in gold["accessories"]]
+    summary = pred.get("summary") or []
+    r["summary_total"] = len(summary)
+    r["summary_on_items"] = sum(any(type_in_evidence(g, s) for g in gold_items) for s in summary)
     return r
 
 
-def evaluate(preds, golds, texts=None):
-    """preds, golds: {SN: 출력 형식}. texts: {SN: 원문} (요약 근거 검사용)."""
-    texts = texts or {}
-    per = {sn: compare(preds[sn], golds[sn], texts.get(sn, "")) for sn in golds}
+def evaluate(preds, golds):
+    """preds, golds: {SN: 출력 형식}."""
+    per = {sn: compare(preds[sn], golds[sn]) for sn in golds}
     rows = list(per.values())
 
     def rate(ok, total):
@@ -103,8 +106,8 @@ def evaluate(preds, golds, texts=None):
         "negatives": rate(sum(r["negatives"] for r in rows), len(rows)),
         "all_fields": rate(sum(r["all"] for r in rows), len(rows)),
         "hallucination": {"count": halluc, "predicted": predicted, "rate": round(halluc / predicted, 4) if predicted else 0.0},
-        "summary_ungrounded": {"count": sum(r["summary_ungrounded"] for r in rows), "total": s_total,
-                               "rate": round(sum(r["summary_ungrounded"] for r in rows) / s_total, 4) if s_total else 0.0},
+        "summary_on_items": {"count": sum(r["summary_on_items"] for r in rows), "total": s_total,
+                             "rate": round(sum(r["summary_on_items"] for r in rows) / s_total, 4) if s_total else None},
     }
     wrong = {sn: _wrong_fields(r) for sn, r in per.items() if not r["all"]}
     return metrics, wrong
@@ -131,9 +134,10 @@ def print_table(results):
     print(f"{'환각(낮을수록 좋음)':<10}" + "".join(
         f"{results[n]['hallucination']['rate'] * 100:5.1f}% ({results[n]['hallucination']['count']}/{results[n]['hallucination']['predicted']})".rjust(22)
         for n in names))
-    print(f"{'요약 근거 없음':<12}" + "".join(
-        f"{results[n]['summary_ungrounded']['rate'] * 100:5.1f}% ({results[n]['summary_ungrounded']['count']}/{results[n]['summary_ungrounded']['total']})".rjust(22)
-        for n in names))
+    def summary_cell(m):
+        s = m["summary_on_items"]
+        return "-" if s["rate"] is None else f"{s['rate'] * 100:5.1f}% ({s['count']}/{s['total']})"
+    print(f"{'요약 옷·소지품 일치':<10}" + "".join(summary_cell(results[n]).rjust(22) for n in names))
 
 
 def save(name, payload):

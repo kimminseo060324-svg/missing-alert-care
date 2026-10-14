@@ -172,30 +172,64 @@ def color_in_evidence(color, evidence):
     return not known and (bool(re.search(r"[가-힣]+색", ev)) or any(w in ev for w in OTHER_COLOR_WORDS))
 
 
-def verify_ai_response(resp, text):
-    """AI 응답(근거 포함)을 원문으로 검증해 출력 형식으로 바꾼다.
+# 상위 개념(일반화한 종류) → 그 아래 종류들. AI가 "숄더백"을 "가방"으로 쓰는 식의 일반화를 근거 검증에서 인정한다.
+# 반대 방향(근거는 "신발"인데 "운동화"라고 쓰기)은 지어낸 구체 정보라 인정하지 않는다.
+# 채점(evaluate)에는 쓰지 않는다: 일반화한 답은 남기지만 정답과 다르면 틀린 것으로 본다.
+HYPERNYMS = {
+    "가방": ("숄더백", "백팩", "책가방", "손가방", "크로스백", "핸드백", "배낭", "에코백", "가방"),
+    "바지": ("하의", "면바지", "청바지", "슬랙스", "조거", "반바지", "트레이닝바지", "등산바지", "정장바지", "몸빼", "바지"),
+    "신발": ("운동화", "구두", "단화", "슬리퍼", "샌들", "크록스", "등산화", "장화", "털신", "고무신", "실내화", "신발"),
+    "상의": ("점퍼", "셔츠", "티셔츠", "니트", "스웨터", "조끼", "카디건", "패딩", "후드티", "맨투맨", "블라우스", "상의"),
+    "모자": ("벙거지", "캡", "비니", "모자"),
+}
 
-    근거가 원문에 없거나, 종류·색이 근거 안에 보이지 않으면 그 항목을 버린다 (환각 방지).
-    (출력, 버린 항목 수)를 돌려준다.
+
+def generalizes(typ, evidence):
+    """typ이 근거에 적힌 종류의 상위 개념인지 (예: 가방 ← "갈색 숄더백")."""
+    words = HYPERNYMS.get(canonical_type(typ))
+    e = canonical_type(evidence)
+    return bool(words) and any(canonical_type(w) in e for w in words)
+
+
+def verify_ai_response(resp, text, lenient=True):
+    """AI 응답(근거 포함)을 원문으로 검증해 출력 형식으로 바꾼다. 환각 방지.
+
+    - 근거 문구가 원문에 없거나, 종류가 근거에서 나온 것이 아니면 그 항목을 버린다.
+    - lenient=True(기본): 색만 근거와 맞지 않으면 색만 비우고 종류는 남긴다.
+      종류가 근거에 적힌 것의 상위 개념이면(숄더백 → 가방) 인정한다.
+    - lenient=False: 예전 방식. 색이 맞지 않으면 항목 전체를 버리고, 상위 개념도 인정하지 않는다.
+    (출력, 버린 항목 수 + 비운 색 수)를 돌려준다.
     """
     out, dropped = empty_output(), 0
 
-    def slot_ok(s):
+    def check(s):
+        """검증한 {type, color} 또는 None."""
+        nonlocal dropped
         ev = s.get("evidence", "")
-        if not s.get("type") or not grounded(ev, text) or not type_in_evidence(s["type"], ev):
-            return False
-        return color_in_evidence(normalize_color(s.get("color")), ev)
+        if not s.get("type") or not grounded(ev, text):
+            return None
+        if not (type_in_evidence(s["type"], ev) or (lenient and generalizes(s["type"], ev))):
+            return None
+        color = normalize_color(s.get("color"))
+        if not color_in_evidence(color, ev):
+            if not lenient:
+                return None
+            dropped += 1  # 색만 비움
+            color = ""
+        return {"type": s["type"].strip(), "color": color}
 
     for slot in SLOTS:
         s = resp.get(slot) or {}
         if s.get("type"):
-            if slot_ok(s):
-                out[slot] = {"type": s["type"].strip(), "color": normalize_color(s.get("color"))}
+            item = check(s)
+            if item:
+                out[slot] = item
             else:
                 dropped += 1
     for a in resp.get("accessories") or []:
-        if slot_ok(a):
-            out["accessories"].append({"type": a["type"].strip(), "color": normalize_color(a.get("color"))})
+        item = check(a)
+        if item:
+            out["accessories"].append(item)
         else:
             dropped += 1
     for n in resp.get("negatives") or []:

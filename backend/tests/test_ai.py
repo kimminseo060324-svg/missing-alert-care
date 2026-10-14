@@ -101,7 +101,7 @@ def _slot(t="", c="", ev=""):
 def test_verify_drops_items_without_evidence():
     resp = {
         "upper": _slot("점퍼", "회색", "회색점퍼"),
-        "lower": _slot("바지", "남색", "검정바지"),        # 색이 근거와 다름 → 버림
+        "lower": _slot("바지", "남색", "검정바지"),        # 색만 근거와 다름 → 색만 비우고 종류는 남김
         "shoes": _slot("운동화", "흰색", "흰색운동화"),     # 원문에 없음 → 버림
         "accessories": [_slot("지팡이", "", "지팡이사용"), _slot("모자", "", "")],  # 근거 없음 → 버림
         "negatives": [{"type": "안경", "evidence": "안경미착용"}],                   # 원문에 없음 → 버림
@@ -109,24 +109,48 @@ def test_verify_drops_items_without_evidence():
     }
     out, dropped = verify_ai_response(resp, TEXT)
     assert out["upper"] == {"type": "점퍼", "color": "회색"}
-    assert out["lower"]["type"] == "" and out["shoes"]["type"] == ""
+    assert out["lower"] == {"type": "바지", "color": ""} and out["shoes"]["type"] == ""
     assert out["accessories"] == [{"type": "지팡이", "color": ""}]
     assert out["negatives"] == [] and out["summary"] == ["지팡이 사용"]
-    assert dropped == 5
+    assert dropped == 5  # 비운 색 1 + 버린 항목 4
+
+    old, _ = verify_ai_response(resp, TEXT, lenient=False)  # 예전 방식은 색이 틀리면 항목 전체를 버림
+    assert old["lower"]["type"] == ""
 
 
-@pytest.mark.parametrize(("slot", "evidence", "kept"), [
-    (_slot("트레이닝 바지", "검정", "검정 츄리닝바지"), "검정 츄리닝바지", True),   # 줄임말을 표준 표현으로
-    (_slot("점퍼", "남색", "남색잠퍼"), "남색잠퍼", True),                        # 오타를 바로잡음
-    (_slot("니트", "흰색", "아이보리 니트"), "아이보리 니트", True),              # 표준표 밖 색 표현
-    (_slot("슬리퍼", "검정", "슬리퍼 차림"), "슬리퍼 차림", False),               # 색을 지어냄
-    (_slot("청바지", "청색", "7부청바지"), "7부청바지", False),                   # 청바지의 '청'은 색이 아님
-    (_slot("코트", "검정", "검정 롱패딩"), "검정 롱패딩", False),                 # 다른 옷
+@pytest.mark.parametrize(("slot", "evidence", "expected"), [
+    (_slot("트레이닝 바지", "검정", "검정 츄리닝바지"), "검정 츄리닝바지", ("트레이닝 바지", "검정")),  # 줄임말을 표준 표현으로
+    (_slot("점퍼", "남색", "남색잠퍼"), "남색잠퍼", ("점퍼", "남색")),                    # 오타를 바로잡음
+    (_slot("니트", "흰색", "아이보리 니트"), "아이보리 니트", ("니트", "흰색")),          # 표준표 밖 색 표현
+    (_slot("슬리퍼", "검정", "슬리퍼 차림"), "슬리퍼 차림", ("슬리퍼", "")),              # 색을 지어냄 → 색만 비움
+    (_slot("청바지", "청색", "7부청바지"), "7부청바지", ("청바지", "")),                  # 청바지의 '청'은 색이 아님
+    (_slot("코트", "검정", "검정 롱패딩"), "검정 롱패딩", None),                          # 다른 옷 → 버림
+    (_slot("가방", "갈색", "갈색 숄더백"), "갈색 숄더백", ("가방", "갈색")),              # 상위 개념으로 일반화 → 인정
+    (_slot("바지", "남색", "곤색하의"), "곤색하의", ("바지", "남색")),                    # 하의 → 바지 → 인정
+    (_slot("운동화", "흰색", "흰신발"), "흰신발", None),                                  # 지어낸 구체 정보 → 버림
 ])
-def test_verify_allows_synonyms_and_typos_but_not_invented_items(slot, evidence, kept):
+def test_verify_allows_synonyms_typos_and_generalization_but_not_invention(slot, evidence, expected):
     resp = {"upper": slot, "lower": _slot(), "shoes": _slot(), "accessories": [], "negatives": [], "summary": []}
     out, _ = verify_ai_response(resp, evidence)
-    assert (out["upper"]["type"] != "") is kept
+    got = (out["upper"]["type"], out["upper"]["color"]) if out["upper"]["type"] else None
+    assert got == expected
+
+
+def test_strict_verify_does_not_accept_generalization():
+    resp = {"upper": _slot(), "lower": _slot(), "shoes": _slot(), "negatives": [], "summary": [],
+            "accessories": [_slot("가방", "갈색", "갈색 숄더백")]}
+    assert verify_ai_response(resp, "갈색 숄더백")[0]["accessories"] == [{"type": "가방", "color": "갈색"}]
+    assert verify_ai_response(resp, "갈색 숄더백", lenient=False)[0]["accessories"] == []
+
+
+def test_summary_counts_only_clothing_and_belongings():
+    gold = {"upper": {"type": "점퍼", "color": "남색"}, "lower": {"type": "", "color": ""},
+            "shoes": {"type": "운동화", "color": "검정"}, "accessories": [{"type": "우산", "color": "빨간색"}],
+            "negatives": [], "summary": []}
+    pred = copy.deepcopy(gold)
+    pred["summary"] = ["빨간 우산", "남색잠퍼", "82세 남성"]  # 나이·성별은 옷·소지품이 아님
+    m, _ = evaluate.evaluate({1: pred}, {1: gold})
+    assert (m["summary_on_items"]["count"], m["summary_on_items"]["total"]) == (2, 3)
 
 
 # 평가용 데이터 (disaster-messages-eval) -----------------------------------------------
@@ -307,19 +331,25 @@ def test_run_ai_saves_progress_and_resumes(monkeypatch, tmp_path):
     labels = {sn: EVAL_LABELS[sn] for sn in sorted(EVAL_LABELS)[:4]}
     called, fail_on = [], {sorted(labels)[2]}
 
-    def fake_extract(client, text, log=print):
+    def fake_call(client, text, log=print):
         sn = next(s for s in labels if EVAL_MSGS[s] == text)
         called.append(sn)
         if sn in fail_on:
             raise extract_ai.AIError("Gemini API 오류 (HTTP 429, 3번 재시도 후)")
-        return label_to_output(labels[sn]), 0, True
-    monkeypatch.setattr(extract_ai, "extract", fake_extract)
+        return {"is_missing_alert": True, "fake_sn": sn}  # AI 원래 응답 자리
+    verified = []
+
+    def fake_verify(raw, text, lenient=True):
+        verified.append(lenient)
+        return label_to_output(labels[raw["fake_sn"]]), 0, raw["is_missing_alert"]
+    monkeypatch.setattr(extract_ai, "call", fake_call)
+    monkeypatch.setattr(extract_ai, "verify", fake_verify)
 
     with pytest.raises(SystemExit) as e:  # 세 번째에서 멈춤
         run_eval.run_ai(EVAL_MSGS, labels)
     assert "다시 실행하면 이어서" in str(e.value)
     cache = json.loads(next(tmp_path.glob("ai-cache-*.json")).read_text(encoding="utf-8"))
-    assert len(cache) == 2 and all(v["is_missing"] for v in cache.values())
+    assert len(cache) == 2 and all("raw" in v for v in cache.values())  # 검증 전 원래 응답을 저장
 
     fail_on.clear()
     called.clear()
@@ -328,5 +358,9 @@ def test_run_ai_saves_progress_and_resumes(monkeypatch, tmp_path):
     assert len(preds) == 4 and all(judged.values())
 
     called.clear()
+    verified.clear()
+    run_eval.run_ai(EVAL_MSGS, labels, lenient=False)  # 검증 방식만 바꿔 다시 채점: 다시 부르지 않음
+    assert called == [] and verified == [False] * 4
+
     run_eval.run_ai(EVAL_MSGS, labels, fresh=True)  # --fresh 는 처음부터
     assert called == sorted(labels)

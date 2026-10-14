@@ -39,7 +39,8 @@ PROMPT = """너는 재난문자를 읽고 실종자 찾기 문자인지 판단�
 7. type에는 옷 이름만 쓴다(예: "체크남방", "꽃무늬 블라우스", "청바지"). 색은 type에 넣지 않는다.
    오타나 줄임말은 표준 옷 이름으로 고쳐 쓴다.
 8. 띄어쓰기 없이 붙여 쓴 표현("청색체크남방검정면바지")도 나눠서 읽는다.
-9. summary: 길에서 이 사람을 알아보기 쉬운 특징 3개 이하. 흔한 것보다 드문 것(보조기구, 무늬, 눈에 띄는 색)을 먼저. 옷차림 외 특징(머리 모양 등)도 문자에 있으면 쓸 수 있다.
+9. summary: 길에서 이 사람을 알아보기 쉬운 옷·소지품 특징 3개 이하. 드물고 눈에 띄는 것을 먼저 쓴다
+   (예: 형광 조끼, 지팡이, 빨간 우산). 나이·성별·키·몸무게·머리 모양은 넣지 않는다. 옷·소지품 정보가 없으면 비운다.
 
 [문자]
 {text}
@@ -97,22 +98,32 @@ def _generate(client, prompt, config, sleep, log):
             raise AIError(f"Gemini 호출에 실패했습니다 ({type(e).__name__})") from None
 
 
-def extract(client, raw_text, sleep=time.sleep, log=print):
-    """원문 하나 → (출력 형식, 근거가 없어 버린 항목 수, 실종 문자인지)."""
+def call(client, raw_text, sleep=time.sleep, log=print):
+    """원문 하나 → AI 원래 응답(검증 전 dict). 캐시에 저장해 두면 검증 규칙을 바꿔도 다시 부르지 않고 다시 채점할 수 있다.
+    응답에는 근거 문구(개인정보를 지운 문장의 일부)가 들어 있다."""
     from google.genai import types
 
-    text = redact(raw_text)
     config = types.GenerateContentConfig(
         temperature=0,
         response_mime_type="application/json",
         response_json_schema=AI_RESPONSE_SCHEMA,
     )
-    resp = _generate(client, build_prompt(text), config, sleep, log)
+    resp = _generate(client, build_prompt(redact(raw_text)), config, sleep, log)
     try:
         data = json.loads(resp.text or "")
     except ValueError:
         raise AIError("Gemini 응답이 JSON이 아닙니다") from None
     if not isinstance(data, dict):
         raise AIError("Gemini 응답이 객체(JSON object)가 아닙니다")
-    out, dropped = verify_ai_response(data, text)
+    return data
+
+
+def verify(data, raw_text, lenient=True):
+    """AI 원래 응답 → (출력 형식, 버린 항목·색 수, 실종 문자인지)."""
+    out, dropped = verify_ai_response(data, redact(raw_text), lenient=lenient)
     return out, dropped, data.get("is_missing_alert") is True
+
+
+def extract(client, raw_text, sleep=time.sleep, log=print):
+    """원문 하나 → (출력 형식, 버린 항목·색 수, 실종 문자인지). call + verify."""
+    return verify(call(client, raw_text, sleep, log), raw_text)
