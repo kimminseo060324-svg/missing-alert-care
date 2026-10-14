@@ -6,6 +6,7 @@
     python -m backend.ai.run_eval --mode ai --dataset eval --fresh   # AI 캐시를 무시하고 처음부터
 
     python -m backend.ai.run_eval --mode ai --dataset eval --verify strict  # 예전 근거 검증 방식으로 다시 채점 (비교용)
+    python -m backend.ai.run_eval --mode both --dataset eval --strict       # 엄격 채점 (옷 종류 완전 일치만)
 
 AI 모드는 문자마다 AI 원래 응답(검증 전)을 results/ai-cache-*.json 에 바로 저장하고, 채점할 때마다 다시 검증한다.
 그래서 검증 규칙(--verify)을 바꿔도 다시 부르지 않는다. 도중에 멈추면(예: 429가 계속될 때)
@@ -100,8 +101,9 @@ def run_ai(msgs, labels, fresh=False, lenient=True):
         tmp.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
         tmp.replace(path)
         print(f"  [{i}/{len(todo)}] SN {sn} 완료")
-    results = {sn: extract_ai.verify(cache[str(sn)]["raw"], msgs[sn], lenient=lenient) for sn in labels}
-    print(f"검증에서 버린 항목·비운 색 {sum(r[1] for r in results.values())}개\n")
+    stats = {"invalid": 0}
+    results = {sn: extract_ai.verify(cache[str(sn)]["raw"], msgs[sn], lenient=lenient, stats=stats) for sn in labels}
+    print(f"검증에서 버린 항목·비운 색 {sum(r[1] for r in results.values())}개 | 형식이 잘못돼 건너뛴 항목 {stats['invalid']}개\n")
     preds = {sn: results[sn][0] for sn, l in labels.items() if l["is_missing"]}
     judged = {sn: results[sn][2] for sn in labels}
     return preds, judged
@@ -113,6 +115,8 @@ def main():
     p.add_argument("--dataset", choices=["sample", "eval", "all"], default="sample")
     p.add_argument("--no-save", action="store_true", help="results/ 에 저장하지 않음")
     p.add_argument("--fresh", action="store_true", help="AI 캐시를 쓰지 않고 처음부터 다시 부름")
+    p.add_argument("--strict", action="store_true",
+                   help="엄격 채점: 옷 종류는 띄어쓰기만 무시하고 완전히 같아야 정답 (동의어·포함 관계 인정 안 함)")
     p.add_argument("--verify", choices=["lenient", "strict"], default="lenient",
                    help="AI 근거 검증 방식. strict는 예전 방식(색이 안 맞으면 항목 전체를 버림), 비교용")
     args = p.parse_args()
@@ -147,7 +151,8 @@ def main():
             print(f"  실종 문자가 아닌데 실종으로 본 SN: {excl['wrongly_kept_SN']}")
     print()
 
-    results = {name: evaluate.evaluate(preds, golds) for name, preds in runs.items()}
+    print(f"채점: {'엄격 (옷 종류 완전 일치만)' if args.strict else '느슨 (동의어·포함 관계 인정)'}")
+    results = {name: evaluate.evaluate(preds, golds, strict=args.strict) for name, preds in runs.items()}
     evaluate.print_table({name: m for name, (m, _) in results.items()})
 
     target_labels = {sn: labels[sn] for sn in targets}
@@ -158,7 +163,7 @@ def main():
         evaluate.print_hard_cases(hard[name])
 
     if not args.no_save:
-        payload = {"mode": args.mode, "dataset": args.dataset, "exclusion": exclusions,
+        payload = {"mode": args.mode, "dataset": args.dataset, "strict": args.strict, "exclusion": exclusions,
                    "results": {name: {"metrics": m, "wrong_fields_by_SN": {str(k): v for k, v in w.items()},
                                       "by_hard_case": hard[name]}
                                for name, (m, w) in results.items()}}

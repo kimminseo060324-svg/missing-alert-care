@@ -191,16 +191,53 @@ def generalizes(typ, evidence):
     return bool(words) and any(canonical_type(w) in e for w in words)
 
 
-def verify_ai_response(resp, text, lenient=True):
+def _clean_item(item, fields):
+    """AI 응답의 항목 하나를 {필드: 문자열}로. 객체가 아니거나 필드가 문자열·null이 아니면 None (형식 오류)."""
+    if not isinstance(item, dict):
+        return None
+    out = {}
+    for f in fields:
+        v = item.get(f)
+        if v is None:
+            out[f] = ""
+        elif isinstance(v, str):
+            out[f] = v
+        else:
+            return None
+    return out
+
+
+def _clean_list(value, fields, stats):
+    """목록 필드를 검사해 형식이 맞는 항목만 돌려준다. 목록이 아니거나 잘못된 항목은 건너뛰고 건수만 센다."""
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        stats["invalid"] += 1
+        return []
+    items = [_clean_item(v, fields) for v in value]
+    stats["invalid"] += sum(i is None for i in items)
+    return [i for i in items if i is not None]
+
+
+def verify_ai_response(resp, text, lenient=True, stats=None):
     """AI 응답(근거 포함)을 원문으로 검증해 출력 형식으로 바꾼다. 환각 방지.
 
+    - 먼저 형식을 검사한다: upper·lower·shoes는 객체, 그 안의 type·color·evidence는 문자열 또는 null,
+      accessories·negatives·summary는 같은 조건의 객체 목록이어야 한다. 형식이 틀린 항목은 오류 없이 건너뛰고
+      stats["invalid"]에 건수만 센다 (stats를 넘긴 경우).
     - 근거 문구가 원문에 없거나, 종류가 근거에서 나온 것이 아니면 그 항목을 버린다.
     - lenient=True(기본): 색만 근거와 맞지 않으면 색만 비우고 종류는 남긴다.
       종류가 근거에 적힌 것의 상위 개념이면(숄더백 → 가방) 인정한다.
     - lenient=False: 예전 방식. 색이 맞지 않으면 항목 전체를 버리고, 상위 개념도 인정하지 않는다.
     (출력, 버린 항목 수 + 비운 색 수)를 돌려준다.
     """
+    stats = stats if stats is not None else {}
+    stats.setdefault("invalid", 0)
     out, dropped = empty_output(), 0
+    if not isinstance(resp, dict):
+        stats["invalid"] += 1
+        return out, dropped
+    slot_fields = ("type", "color", "evidence")
 
     def check(s):
         """검증한 {type, color} 또는 None."""
@@ -219,26 +256,32 @@ def verify_ai_response(resp, text, lenient=True):
         return {"type": s["type"].strip(), "color": color}
 
     for slot in SLOTS:
-        s = resp.get(slot) or {}
-        if s.get("type"):
+        raw = resp.get(slot)
+        if raw is None:
+            continue
+        s = _clean_item(raw, slot_fields)
+        if s is None:
+            stats["invalid"] += 1
+            continue
+        if s["type"]:
             item = check(s)
             if item:
                 out[slot] = item
             else:
                 dropped += 1
-    for a in resp.get("accessories") or []:
+    for a in _clean_list(resp.get("accessories"), slot_fields, stats):
         item = check(a)
         if item:
             out["accessories"].append(item)
         else:
             dropped += 1
-    for n in resp.get("negatives") or []:
-        if n.get("type") and grounded(n.get("evidence"), text):
+    for n in _clean_list(resp.get("negatives"), ("type", "evidence"), stats):
+        if n["type"] and grounded(n["evidence"], text):
             out["negatives"].append(n["type"].strip())
         else:
             dropped += 1
-    for s in (resp.get("summary") or [])[:3]:
-        if s.get("text") and grounded(s.get("evidence"), text):
+    for s in _clean_list(resp.get("summary"), ("text", "evidence"), stats)[:3]:
+        if s["text"] and grounded(s["evidence"], text):
             out["summary"].append(s["text"].strip())
         else:
             dropped += 1

@@ -4,7 +4,11 @@
 - AI에는 개인정보(이름·번호·상세 주소)를 지운 문장(preprocess.redact)만 보낸다.
 - 실종 문자인지(is_missing_alert)도 함께 판단하게 한다.
 - 항목마다 근거 문구(evidence)를 받아, 원문에 실제로 있는 것만 남긴다 (schema.verify_ai_response).
-- HTTP 429(분당 호출 제한)는 15초 → 30초 → 60초 기다렸다가 다시 부르고, 그래도 안 되면 멈춘다.
+- 요청마다 타임아웃을 건다 (.env GEMINI_TIMEOUT_SEC, 기본 30초). google-genai의 HttpOptions.timeout은
+  밀리초 단위 정수다 (SDK 문서: "timeout: int | None — Timeout for the request in milliseconds").
+  SDK는 retry_options를 주지 않으면 스스로 다시 부르지 않으므로, 재시도는 여기서만 한다.
+- 타임아웃, HTTP 429(분당 호출 제한)·500·503은 15초 → 30초 → 60초 기다렸다가 다시 부르고(최대 3번),
+  그래도 안 되면 멈춘다. 그 밖의 오류는 다시 부르지 않는다.
 - 오류가 나도 키, 요청 내용, 응답 본문은 메시지·로그에 넣지 않는다.
 """
 import json
@@ -19,8 +23,10 @@ from .schema import AI_RESPONSE_SCHEMA, STANDARD_COLORS, verify_ai_response
 
 ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 DEFAULT_MODEL = "gemini-3.5-flash-lite"  # 안정(Stable) Flash-Lite, 구조화 출력 지원 (2026-07 업데이트)
-RETRY_WAITS = (15, 30, 60)  # 429일 때 다시 부르기 전 기다리는 초
+RETRY_WAITS = (15, 30, 60)  # 다시 부르기 전 기다리는 초 (최대 3번)
+RETRY_HTTP_CODES = {429, 500, 503}
 DEFAULT_CALL_INTERVAL = 4.0  # 호출 사이 쉬는 초 (GEMINI_CALL_INTERVAL_SEC)
+DEFAULT_TIMEOUT = 30.0  # 요청 하나의 제한 시간(초) (GEMINI_TIMEOUT_SEC)
 
 PROMPT = """너는 재난문자를 읽고 실종자 찾기 문자인지 판단한 뒤, 인상착의(옷차림)를 JSON으로 정리한다.
 
@@ -40,7 +46,7 @@ PROMPT = """너는 재난문자를 읽고 실종자 찾기 문자인지 판단�
    오타나 줄임말은 표준 옷 이름으로 고쳐 쓴다.
 8. 띄어쓰기 없이 붙여 쓴 표현("청색체크남방검정면바지")도 나눠서 읽는다.
 9. summary: 길에서 이 사람을 알아보기 쉬운 옷·소지품 특징 3개 이하. 드물고 눈에 띄는 것을 먼저 쓴다
-   (예: 형광 조끼, 지팡이, 빨간 우산). 나이·성별·키·몸무게·머리 모양은 넣지 않는다. 옷·소지품 정보가 없으면 비운다.
+   (예: 형광 조끼, 노란 장화, 캐리어). 나이·성별·키·몸무게·머리 모양은 넣지 않는다. 옷·소지품 정보가 없으면 비운다.
 
 [문자]
 {text}
@@ -55,47 +61,75 @@ def model_name():
     return (os.getenv("GEMINI_MODEL") or DEFAULT_MODEL).strip()
 
 
-def call_interval():
-    """GEMINI_CALL_INTERVAL_SEC (호출 사이 쉬는 초). 비었거나 숫자가 아니거나 음수면 기본 4초."""
+def _env_seconds(name, default, low, high):
+    """.env 값을 초로 읽는다. 비었거나 숫자가 아니거나 범위 밖이면 기본값."""
     try:
-        sec = float((os.getenv("GEMINI_CALL_INTERVAL_SEC") or "").strip())
+        sec = float((os.getenv(name) or "").strip())
     except ValueError:
-        return DEFAULT_CALL_INTERVAL
-    return sec if 0 <= sec <= 600 else DEFAULT_CALL_INTERVAL
+        return default
+    return sec if low <= sec <= high else default
+
+
+def call_interval():
+    """GEMINI_CALL_INTERVAL_SEC (호출 사이 쉬는 초, 0~600). 아니면 기본 4초."""
+    return _env_seconds("GEMINI_CALL_INTERVAL_SEC", DEFAULT_CALL_INTERVAL, 0, 600)
+
+
+def timeout_sec():
+    """GEMINI_TIMEOUT_SEC (요청 하나의 제한 시간, 1~600초). 아니면 기본 30초."""
+    return _env_seconds("GEMINI_TIMEOUT_SEC", DEFAULT_TIMEOUT, 1, 600)
 
 
 def get_client():
-    """키를 읽어 클라이언트를 만든다. 키가 없으면 안내 문구로 끝낸다."""
+    """키를 읽어 클라이언트를 만든다. 키가 없으면 안내 문구로 끝낸다. 타임아웃은 밀리초로 넘긴다."""
     load_dotenv(ENV_PATH)
     key = os.getenv("GEMINI_API_KEY")
     if not key:
         raise SystemExit("[오류] GEMINI_API_KEY가 없습니다. 저장소 루트의 .env에 키를 넣은 뒤 --mode ai를 실행해 주세요.")
     from google import genai  # 키가 있을 때만 불러온다
-    return genai.Client(api_key=key)
+    from google.genai import types
+    return genai.Client(api_key=key, http_options=types.HttpOptions(timeout=int(timeout_sec() * 1000)))
 
 
 def build_prompt(text):
     return PROMPT.format(colors=", ".join(STANDARD_COLORS), text=text)
 
 
+def _timeout_errors():
+    """SDK가 쓰는 HTTP 라이브러리(httpx, 있으면 httpx2)의 타임아웃 예외."""
+    import httpx
+    errs = [httpx.TimeoutException]
+    try:
+        import httpx2
+        errs.append(httpx2.TimeoutException)
+    except ImportError:
+        pass
+    return tuple(errs)
+
+
 def _generate(client, prompt, config, sleep, log):
-    """한 번 호출. 429면 RETRY_WAITS만큼 기다렸다 다시 부른다."""
+    """한 번 호출. 타임아웃·429·500·503이면 RETRY_WAITS만큼 기다렸다 다시 부른다 (최대 3번)."""
     from google.genai import errors
 
+    timeouts = _timeout_errors()
     for attempt in range(len(RETRY_WAITS) + 1):
         try:
             return client.models.generate_content(model=model_name(), contents=prompt, config=config)
         except errors.APIError as e:
             # e의 문자열에는 응답 본문이 담길 수 있어 상태 코드만 쓴다
-            if e.code == 429 and attempt < len(RETRY_WAITS):
-                wait = RETRY_WAITS[attempt]
-                log(f"429, {wait}초 후 재시도 ({attempt + 1}/{len(RETRY_WAITS)})")
-                sleep(wait)
-                continue
-            suffix = f", {len(RETRY_WAITS)}번 재시도 후" if e.code == 429 else ""
-            raise AIError(f"Gemini API 오류 (HTTP {e.code}{suffix})") from None
-        except Exception as e:
+            label, reason, retryable = str(e.code), f"HTTP {e.code}", e.code in RETRY_HTTP_CODES
+        except timeouts:
+            label = reason = f"응답 시간 초과({timeout_sec():g}초)"
+            retryable = True
+        except Exception as e:  # 예외 메시지에 요청 정보가 담길 수 있어 종류만 쓴다
             raise AIError(f"Gemini 호출에 실패했습니다 ({type(e).__name__})") from None
+        if retryable and attempt < len(RETRY_WAITS):
+            wait = RETRY_WAITS[attempt]
+            log(f"{label}, {wait}초 후 재시도 ({attempt + 1}/{len(RETRY_WAITS)})")
+            sleep(wait)
+            continue
+        suffix = f", {len(RETRY_WAITS)}번 재시도 후" if retryable else ""
+        raise AIError(f"Gemini API 오류 ({reason}{suffix})") from None
 
 
 def call(client, raw_text, sleep=time.sleep, log=print):
@@ -118,10 +152,10 @@ def call(client, raw_text, sleep=time.sleep, log=print):
     return data
 
 
-def verify(data, raw_text, lenient=True):
-    """AI 원래 응답 → (출력 형식, 버린 항목·색 수, 실종 문자인지)."""
-    out, dropped = verify_ai_response(data, redact(raw_text), lenient=lenient)
-    return out, dropped, data.get("is_missing_alert") is True
+def verify(data, raw_text, lenient=True, stats=None):
+    """AI 원래 응답 → (출력 형식, 버린 항목·색 수, 실종 문자인지). 형식이 틀린 항목 수는 stats["invalid"]에."""
+    out, dropped = verify_ai_response(data, redact(raw_text), lenient=lenient, stats=stats)
+    return out, dropped, isinstance(data, dict) and data.get("is_missing_alert") is True
 
 
 def extract(client, raw_text, sleep=time.sleep, log=print):

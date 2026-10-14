@@ -1,9 +1,10 @@
 """추출 결과(규칙 또는 AI)를 정답과 필드별로 비교해 정확도를 계산한다.
 
 비교 기준
-- 옷 종류: 띄어쓰기를 무시하고, 같은 옷의 다른 표현(츄리닝=트레이닝, 쓰레빠=슬리퍼, 반팔=반소매 티셔츠, 남방=셔츠 등,
-  schema.TYPE_SYNONYMS)을 같게 본 뒤, 같거나 한쪽이 다른 쪽을 포함하면 정답 (예: 블라우스 ⊂ 꽃무늬 블라우스).
-  upper·lower·shoes 3칸 × 문자 수. 둘 다 비어 있으면 정답.
+- 옷 종류 (느슨, 기본): 띄어쓰기를 무시하고, 같은 옷의 다른 표현(츄리닝=트레이닝, 쓰레빠=슬리퍼, 반팔=반소매,
+  남방=셔츠 등, schema.TYPE_SYNONYMS)을 같게 본 뒤, 같거나 한쪽이 다른 쪽을 포함하면 정답 (예: 블라우스 ⊂ 꽃무늬 블라우스).
+  옷 종류 (엄격, --strict): 띄어쓰기만 무시하고 글자가 완전히 같아야 정답. 동의어·포함 관계를 인정하지 않는다.
+  소지품·부정 표현의 종류 비교에도 같은 방식을 쓴다. upper·lower·shoes 3칸 × 문자 수. 둘 다 비어 있으면 정답.
 - 색상: 정답에 색이 적혀 있는 칸만 채점한다. 표준색이 같으면 정답. 정답에 색이 없는 칸("색 정보 없음")은 채점에서 뺀다.
 - 소지품·부정 표현: 문자마다 항목 묶음이 정답과 같으면 정답 (소지품 색도 정답에 색이 있을 때만 본다).
 - 전체 필드: 문자 하나의 옷 3칸(종류, 채점하는 색), 소지품, 부정 표현이 모두 맞으면 정답.
@@ -23,19 +24,23 @@ from .schema import SLOTS, canonical_type, normalize_color, type_in_evidence
 RESULTS_DIR = Path(__file__).resolve().parents[2] / "results"
 
 
-def type_match(pred, gold):
+def type_match(pred, gold, strict=False):
+    """옷 종류가 같은지. 느슨(기본): 동의어를 같게 보고 한쪽이 다른 쪽을 포함하면 정답.
+    엄격(strict=True): 띄어쓰기만 무시하고 글자가 완전히 같아야 정답 (동의어·포함 관계 인정 안 함)."""
+    if strict:
+        return "".join((pred or "").split()) == "".join((gold or "").split())
     p, g = canonical_type(pred), canonical_type(gold)
     if p == g:
         return True
     return bool(p and g) and min(len(p), len(g)) >= 2 and (p in g or g in p)
 
 
-def _match_list(pred, gold, key=lambda x: x):
+def _match_list(pred, gold, key=lambda x: x, strict=False):
     """두 목록을 type_match로 짝지어 (맞은 쌍, 남은 예측, 남은 정답)을 돌려준다."""
     rest_gold = list(gold)
     pairs, extra = [], []
     for p in pred:
-        g = next((g for g in rest_gold if type_match(key(p), key(g))), None)
+        g = next((g for g in rest_gold if type_match(key(p), key(g), strict)), None)
         if g is None:
             extra.append(p)
         else:
@@ -44,25 +49,27 @@ def _match_list(pred, gold, key=lambda x: x):
     return pairs, extra, rest_gold
 
 
-def compare(pred, gold):
-    """문자 하나 비교. 필드별 맞음 여부와 환각 수를 돌려준다."""
-    r = {"slots": {}, "hallucinated": 0, "predicted": 0, "summary_total": 0, "summary_ungrounded": 0}
+def compare(pred, gold, strict=False):
+    """문자 하나 비교. 필드별 맞음 여부와 환각 수를 돌려준다. strict는 옷 종류 비교 방식 (type_match 참고)."""
+    r = {"slots": {}, "hallucinated": 0, "predicted": 0, "summary_total": 0, "summary_on_items": 0}
+
     def invented_color(p_color, g_color):  # 정답에 색이 없는데 색을 붙였는가
         return bool(normalize_color(p_color)) and not normalize_color(g_color)
 
     for s in SLOTS:
         p, g = pred[s], gold[s]
-        t_ok = (not p["type"] and not g["type"]) or (bool(p["type"]) and bool(g["type"]) and type_match(p["type"], g["type"]))
+        same = bool(p["type"]) and bool(g["type"]) and type_match(p["type"], g["type"], strict)
+        t_ok = (not p["type"] and not g["type"]) or same
         c_ok = normalize_color(p["color"]) == normalize_color(g["color"]) if normalize_color(g["color"]) else None
         r["slots"][s] = {"type": t_ok, "color": c_ok}
         if p["type"]:
             r["predicted"] += 1
-            r["hallucinated"] += not g["type"] or not type_match(p["type"], g["type"])
+            r["hallucinated"] += not same
         if invented_color(p["color"], g["color"]):
             r["predicted"] += 1
             r["hallucinated"] += 1
 
-    pairs, extra, missing = _match_list(pred["accessories"], gold["accessories"], key=lambda x: x["type"])
+    pairs, extra, missing = _match_list(pred["accessories"], gold["accessories"], key=lambda x: x["type"], strict=strict)
     r["accessories"] = not extra and not missing and all(
         normalize_color(p["color"]) == normalize_color(g["color"]) for p, g in pairs if normalize_color(g["color"]))
     r["predicted"] += len(pred["accessories"])
@@ -72,7 +79,7 @@ def compare(pred, gold):
             r["predicted"] += 1
             r["hallucinated"] += 1
 
-    _, extra_n, missing_n = _match_list(pred["negatives"], gold["negatives"])
+    _, extra_n, missing_n = _match_list(pred["negatives"], gold["negatives"], strict=strict)
     r["negatives"] = not extra_n and not missing_n
     r["predicted"] += len(pred["negatives"])
     r["hallucinated"] += len(extra_n)
@@ -85,9 +92,9 @@ def compare(pred, gold):
     return r
 
 
-def evaluate(preds, golds):
-    """preds, golds: {SN: 출력 형식}."""
-    per = {sn: compare(preds[sn], golds[sn]) for sn in golds}
+def evaluate(preds, golds, strict=False):
+    """preds, golds: {SN: 출력 형식}. strict=True면 옷 종류를 완전 일치로만 인정한다."""
+    per = {sn: compare(preds[sn], golds[sn], strict) for sn in golds}
     rows = list(per.values())
 
     def rate(ok, total):

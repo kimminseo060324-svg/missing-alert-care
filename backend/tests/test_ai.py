@@ -136,6 +136,39 @@ def test_verify_allows_synonyms_typos_and_generalization_but_not_invention(slot,
     assert got == expected
 
 
+TEXT2 = "회색점퍼, 검정바지, 지팡이사용"
+GOOD_ACC = {"type": "지팡이", "color": None, "evidence": "지팡이사용"}
+
+
+@pytest.mark.parametrize(("resp", "invalid"), [
+    ([], 1),                                                                  # 응답이 객체가 아님
+    ("문자열", 1),
+    ({"upper": "회색 점퍼"}, 1),                                              # 칸이 객체가 아님
+    ({"upper": {"type": 123, "color": "회색", "evidence": "회색점퍼"}}, 1),   # type이 문자열이 아님
+    ({"lower": {"type": "바지", "color": ["검정"], "evidence": "검정바지"}}, 1),
+    ({"shoes": {"type": "운동화", "color": None, "evidence": {"x": 1}}}, 1),  # evidence가 객체
+    ({"accessories": "지팡이"}, 1),                                           # 목록이 아님
+    ({"accessories": ["지팡이", GOOD_ACC]}, 1),                               # 목록 원소가 객체가 아님 (정상 원소는 남음)
+    ({"negatives": [1, {"type": "모자", "evidence": 5}]}, 2),
+    ({"summary": {"text": "x"}}, 1),
+    ({"summary": [None, {"text": True, "evidence": "x"}]}, 2),
+    ({"upper": None, "accessories": None, "negatives": None, "summary": None}, 0),  # null은 빈 값으로 봄
+])
+def test_malformed_ai_response_is_skipped_without_error(resp, invalid):
+    stats = {}
+    out, _ = verify_ai_response(resp, TEXT2, stats=stats)
+    assert stats["invalid"] == invalid
+    assert set(out) == {"upper", "lower", "shoes", "accessories", "negatives", "summary"}
+    if resp == {"accessories": ["지팡이", GOOD_ACC]}:
+        assert out["accessories"] == [{"type": "지팡이", "color": ""}]
+
+
+def test_malformed_is_missing_alert_is_treated_as_false():
+    out, _, is_missing = extract_ai.verify({"is_missing_alert": "true", "upper": None}, "회색점퍼")
+    assert is_missing is False
+    assert extract_ai.verify(["not", "dict"], "회색점퍼")[2] is False
+
+
 def test_strict_verify_does_not_accept_generalization():
     resp = {"upper": _slot(), "lower": _slot(), "shoes": _slot(), "negatives": [], "summary": [],
             "accessories": [_slot("가방", "갈색", "갈색 숄더백")]}
@@ -189,6 +222,42 @@ def test_eval_preprocess_removes_names(sn):
 
 def test_redact_keeps_title_words():
     assert "어린이(남,9세)" in preprocess.redact("고잔동 놀이터에서 서임시 어린이(남,9세) 실종")
+
+
+@pytest.mark.parametrize("text", ["남색으로 170cm, 회색바지", "흰색으로 2벌 챙김", "흰바지로 2벌", "검정으로 45세"])
+def test_redact_keeps_non_address_phrases(text):
+    assert preprocess.redact(text) == text  # "○○으로 숫자"와 단위가 붙은 숫자는 주소가 아님
+
+
+@pytest.mark.parametrize(("text", "removed"), [
+    ("세종대로 110 앞", "세종대로 110"), ("한신대길 137 정문", "한신대길 137"),
+    ("테헤란로 152-1 근처", "테헤란로 152-1"), ("중앙로123번길 4 앞", "중앙로123번길"),
+])
+def test_redact_still_removes_road_addresses(text, removed):
+    out = preprocess.redact(text)
+    assert removed not in out and not any(ch.isdigit() for ch in out)
+
+
+@pytest.mark.parametrize(("pred", "gold", "loose", "strict"), [
+    ("점퍼", "점퍼", True, True), ("트레이닝 바지", "트레이닝바지", True, True),   # 띄어쓰기는 둘 다 무시
+    ("츄리닝바지", "트레이닝 바지", True, False),                                   # 동의어
+    ("블라우스", "꽃무늬 블라우스", True, False),                                   # 포함 관계
+    ("반팔티", "반소매 티셔츠", True, False), ("코트", "점퍼", False, False),
+])
+def test_strict_scoring_accepts_exact_match_only(pred, gold, loose, strict):
+    assert evaluate.type_match(pred, gold) is loose
+    assert evaluate.type_match(pred, gold, strict=True) is strict
+
+
+def test_strict_scoring_lowers_accuracy_for_synonyms():
+    gold = {"upper": {"type": "반소매 티셔츠", "color": ""}, "lower": {"type": "트레이닝 바지", "color": ""},
+            "shoes": {"type": "슬리퍼", "color": ""}, "accessories": [], "negatives": [], "summary": []}
+    pred = copy.deepcopy(gold)
+    pred["upper"]["type"], pred["lower"]["type"], pred["shoes"]["type"] = "반팔티", "츄리닝바지", "쓰레빠"
+    loose, _ = evaluate.evaluate({1: pred}, {1: gold})
+    strict, _ = evaluate.evaluate({1: pred}, {1: gold}, strict=True)
+    assert loose["type"]["correct"] == 3 and strict["type"]["correct"] == 0
+    assert strict["hallucination"]["count"] == 3
 
 
 @pytest.mark.parametrize(("raw", "name", "kept"), [
@@ -303,11 +372,61 @@ def test_429_gives_up_after_three_retries():
     assert "429" in str(e.value) and "BODY-MARKER" not in str(e.value)
 
 
-def test_other_errors_are_not_retried():
+@pytest.mark.parametrize("code", [400, 401, 403, 404])
+def test_other_errors_are_not_retried(code):
     slept = []
-    with pytest.raises(extract_ai.AIError):
-        extract_ai.extract(_FakeClient(errors=[_api_error(500)]), "회색점퍼", sleep=slept.append)
-    assert slept == []
+    with pytest.raises(extract_ai.AIError) as e:
+        extract_ai.extract(_FakeClient(errors=[_api_error(code)]), "회색점퍼", sleep=slept.append)
+    assert slept == [] and f"HTTP {code})" in str(e.value)
+
+
+@pytest.mark.parametrize("code", [500, 503])
+def test_server_errors_are_retried(code):
+    slept, logs = [], []
+    client = _FakeClient(text=_resp(), errors=[_api_error(code)])
+    extract_ai.extract(client, "회색점퍼", sleep=slept.append, log=logs.append)
+    assert slept == [15] and logs == [f"{code}, 15초 후 재시도 (1/3)"] and len(client.calls) == 2
+
+
+def test_timeout_is_retried_then_gives_up_without_secrets():
+    import httpx
+    slept, logs = [], []
+    err = httpx.ReadTimeout("timed out: https://example/?key=SECRET-KEY body=BODY-MARKER")
+    client = _FakeClient(text=_resp(), errors=[err] * 4)
+    with pytest.raises(extract_ai.AIError) as e:
+        extract_ai.extract(client, "김가상씨(남, 82세) 회색점퍼", sleep=slept.append, log=logs.append)
+    assert slept == [15, 30, 60] and len(client.calls) == 4
+    msg = str(e.value) + " ".join(logs)
+    assert "응답 시간 초과" in msg and "3번 재시도 후" in str(e.value)
+    assert "SECRET-KEY" not in msg and "BODY-MARKER" not in msg and "김가상" not in msg
+    assert e.value.__cause__ is None and e.value.__suppress_context__
+
+
+def test_timeout_then_success():
+    import httpx
+    slept = []
+    client = _FakeClient(text=_resp(upper=_slot("점퍼", "회색", "회색점퍼")), errors=[httpx.ConnectTimeout("x")])
+    out, _, _ = extract_ai.extract(client, "회색점퍼", sleep=slept.append, log=lambda m: None)
+    assert slept == [15] and out["upper"]["type"] == "점퍼"
+
+
+@pytest.mark.parametrize(("value", "expected_ms"), [
+    (None, 30000), ("", 30000), ("abc", 30000), ("0", 30000), ("-5", 30000), ("9999", 30000),
+    ("10", 10000), ("2.5", 2500), ("600", 600000),
+])
+def test_client_timeout_is_set_in_milliseconds(monkeypatch, value, expected_ms):
+    import google.genai as genai
+    captured = {}
+    monkeypatch.setattr(extract_ai, "load_dotenv", lambda *a, **k: None)
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    if value is None:
+        monkeypatch.delenv("GEMINI_TIMEOUT_SEC", raising=False)
+    else:
+        monkeypatch.setenv("GEMINI_TIMEOUT_SEC", value)
+    monkeypatch.setattr(genai, "Client", lambda **kw: captured.update(kw) or "client")
+    assert extract_ai.get_client() == "client"
+    assert captured["http_options"].timeout == expected_ms  # SDK HttpOptions.timeout은 밀리초 정수
+    assert captured["http_options"].retry_options is None  # SDK 자체 재시도는 끔 (재시도는 우리 코드에서만)
 
 
 @pytest.mark.parametrize(("value", "expected"), [
@@ -339,7 +458,7 @@ def test_run_ai_saves_progress_and_resumes(monkeypatch, tmp_path):
         return {"is_missing_alert": True, "fake_sn": sn}  # AI 원래 응답 자리
     verified = []
 
-    def fake_verify(raw, text, lenient=True):
+    def fake_verify(raw, text, lenient=True, stats=None):
         verified.append(lenient)
         return label_to_output(labels[raw["fake_sn"]]), 0, raw["is_missing_alert"]
     monkeypatch.setattr(extract_ai, "call", fake_call)
