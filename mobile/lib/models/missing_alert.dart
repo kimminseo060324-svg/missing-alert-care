@@ -33,6 +33,7 @@ class MissingAlert {
     this.accessories = '',
     this.aiStatus = AiStatus.none,
     this.aiSummary = const [],
+    this.hasClothingDetail = true,
   });
 
   factory MissingAlert.fromJson(Map<String, dynamic> json) {
@@ -64,6 +65,7 @@ class MissingAlert {
       accessories: pick(_str(json['accessories']), fromAi(['accessories'])),
       aiStatus: aiStatus,
       aiSummary: aiStatus == AiStatus.done ? _list(ai!['summary']) : const [],
+      hasClothingDetail: ai == null || ai['clothing'] is Map,
       foundTime: demoFoundTime.isNotEmpty
           ? demoFoundTime
           : _clock(_str(json['found_at'])),
@@ -112,6 +114,10 @@ class MissingAlert {
   final String accessories; // 소지품 (지팡이, 배낭 …)
   final AiStatus aiStatus;
   final List<String> aiSummary; // 서버가 정리한 옷차림 문장 (최대 3개)
+
+  /// 옷차림 칸(ai.clothing)까지 받은 데이터예요.
+  /// 목록(/alerts)에는 ai.clothing이 없어서 false, 상세(/alerts/{id})는 true.
+  final bool hasClothingDetail;
   final String foundTime; // 발견 시각 "14:35" (모르면 빈 글자)
   final AlertStatus status;
 
@@ -133,6 +139,13 @@ class MissingAlert {
     shoes,
     accessories,
   ].any((s) => s.isNotEmpty);
+
+  /// "이것만 기억하세요"처럼 좁은 칸에 쓰는 짧은 말
+  String get outfitShortNote => switch (aiStatus) {
+    AiStatus.pending => aiAnalyzing,
+    AiStatus.unavailable => '제공 불가',
+    _ => noInfo,
+  };
 
   /// 옷차림이 하나도 없을 때 대신 보여 줄 말
   String get outfitNote => switch (aiStatus) {

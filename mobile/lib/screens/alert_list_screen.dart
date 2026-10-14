@@ -154,7 +154,11 @@ class _AlertListScreenState extends State<AlertListScreen> {
                               alert: a,
                               number: i + 1,
                               selected: _filter == _Filter.all && i == 0,
-                              onTap: () => AppRoutes.detail(context, a),
+                              onTap: () => AppRoutes.detail(
+                                context,
+                                a,
+                                repository: widget.repository,
+                              ),
                             ),
                             const SizedBox(height: 10),
                           ],

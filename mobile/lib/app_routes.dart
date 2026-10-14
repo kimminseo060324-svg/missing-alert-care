@@ -20,12 +20,19 @@ class AppRoutes {
   }) => _push(context, AlertListScreen(repository: repository));
 
   /// 수색 중이면 05 상세, 발견 완료면 07 발견 완료 상세
-  static Widget detailScreen(MissingAlert alert) => alert.isFound
+  /// [repository]는 05 상세가 다시 읽을 곳이에요 (목록과 같은 곳).
+  static Widget detailScreen(
+    MissingAlert alert, {
+    AlertRepository? repository,
+  }) => alert.isFound
       ? FoundDetailScreen(alert: alert)
-      : AlertDetailScreen(alert: alert);
+      : AlertDetailScreen(alert: alert, repository: repository);
 
-  static Future<void> detail(BuildContext context, MissingAlert alert) =>
-      _push(context, detailScreen(alert));
+  static Future<void> detail(
+    BuildContext context,
+    MissingAlert alert, {
+    AlertRepository? repository,
+  }) => _push(context, detailScreen(alert, repository: repository));
 
   static Future<void> report(BuildContext context, MissingAlert alert) =>
       _push(context, ReportScreen(alert: alert));

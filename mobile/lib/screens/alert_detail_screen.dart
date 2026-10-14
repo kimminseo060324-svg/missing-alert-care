@@ -14,7 +14,9 @@ import '../widgets/swatch_tile.dart';
 import '../widgets/timeline.dart';
 
 /// 05 실종 정보 상세 (수색 중)
-/// 아래로 당기면 서버에서 다시 읽어요 (AI 옷차림 분석이 끝났는지 볼 때).
+/// 서버 모드면 열 때 상세(/alerts/{id})를 바로 다시 읽어요.
+/// 목록에서 받은 경보에는 옷차림 칸(ai.clothing)이 없고, 상태도 바뀌었을 수 있어서요.
+/// 아래로 당겨도 다시 읽어요 (AI 옷차림 분석이 끝났는지 볼 때).
 class AlertDetailScreen extends StatefulWidget {
   const AlertDetailScreen({super.key, required this.alert, this.repository});
 
@@ -29,23 +31,63 @@ class AlertDetailScreen extends StatefulWidget {
 
 class _AlertDetailScreenState extends State<AlertDetailScreen> {
   late MissingAlert alert = widget.alert;
+  late final AlertRepository _repo =
+      widget.repository ?? AlertRepository.instance;
 
-  Future<void> _reload() async {
-    final repository = widget.repository ?? AlertRepository.instance;
+  /// 상세를 읽는 중이에요.
+  bool _loading = false;
+
+  /// 마지막으로 읽기에 실패했어요.
+  bool _failed = false;
+
+  /// 요청 번호. 여러 번 당겨도 마지막 요청의 응답만 화면에 넣어요.
+  int _request = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // 앱 안 가짜 데이터는 목록에 다 들어 있어서 다시 읽지 않아요.
+    if (_repo.isServer) {
+      _loading = true;
+      _fetch();
+    }
+  }
+
+  Future<void> _reload() {
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
+    return _fetch();
+  }
+
+  Future<void> _fetch() async {
+    final request = ++_request;
     MissingAlert? fresh;
     try {
-      fresh = await repository.loadOne(alert.id);
+      fresh = await _repo.loadOne(alert.id);
     } catch (_) {
       fresh = null;
     }
-    if (!mounted) return;
+    if (!mounted || request != _request) return; // 더 새 요청이 있어요
     if (fresh == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('다시 불러오지 못했어요. 잠시 후 다시 시도해 주세요.')),
-      );
+      setState(() {
+        _loading = false;
+        _failed = true;
+      });
+      // 옷차림 칸이 이미 있으면 화면은 그대로 두고 안내만 해요.
+      if (alert.hasClothingDetail) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('다시 불러오지 못했어요. 잠시 후 다시 시도해 주세요.')),
+        );
+      }
       return;
     }
-    setState(() => alert = fresh!);
+    setState(() {
+      alert = fresh!;
+      _loading = false;
+      _failed = false;
+    });
   }
 
   @override
@@ -108,7 +150,12 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
                             ],
                           ),
                           const SizedBox(height: 8),
-                          _OutfitTiles(alert: alert, onRefresh: _reload),
+                          _OutfitTiles(
+                            alert: alert,
+                            loading: _loading,
+                            failed: _failed,
+                            onRefresh: _reload,
+                          ),
                           const SizedBox(height: 10),
                           Text(
                             '그림은 AI가 문자 내용으로 그린 옷차림이에요. 얼굴은 그리지 않아요.',
@@ -216,9 +263,15 @@ class _RememberTiles extends StatelessWidget {
             for (final s in summary) (s, s),
             if (summary.length < 3) ('키', alert.heightText),
           ]
+        : alert.hasAi
+        ? [
+            ('상의', _short(alert.clothingTop)),
+            ('하의', _short(alert.clothingBottom)),
+            ('키', alert.heightText),
+          ]
         : [
             ('상의', alert.topText),
-            (alert.hasAi ? '하의' : '하의·신발', alert.bottomText),
+            ('하의·신발', alert.bottomText),
             ('키', alert.heightText),
           ];
     return IntrinsicHeight(
@@ -235,16 +288,31 @@ class _RememberTiles extends StatelessWidget {
       ),
     );
   }
+
+  /// 좁은 칸이라 긴 안내 대신 "분석 중" / "제공 불가" / "정보 없음"
+  String _short(String text) => text.isNotEmpty ? text : alert.outfitShortNote;
 }
 
 /// 인상착의의 옷차림 칸.
 /// 서버 ai가 있으면 상의·하의·신발·소지품을 따로 보여 줘요.
 /// 옷차림이 하나도 없으면 "분석 중" 같은 한 줄 안내, 분석 중이면 새로고침 버튼도 같이.
+/// 목록에서 받은 경보(옷차림 칸 없음)는 상세를 읽는 동안 "불러오는 중",
+/// 실패하면 "다시 시도" 버튼을 보여 줘요.
 /// ai가 없으면(앱 안 가짜 데이터) 지금처럼 상의, 하의·신발 2칸이에요.
 class _OutfitTiles extends StatelessWidget {
-  const _OutfitTiles({required this.alert, required this.onRefresh});
+  const _OutfitTiles({
+    required this.alert,
+    required this.loading,
+    required this.failed,
+    required this.onRefresh,
+  });
+
+  static const loadingText = '불러오는 중';
+  static const failedText = '옷차림을 불러오지 못했어요';
 
   final MissingAlert alert;
+  final bool loading;
+  final bool failed;
   final Future<void> Function() onRefresh;
 
   @override
@@ -252,20 +320,19 @@ class _OutfitTiles extends StatelessWidget {
     if (!alert.hasAi) {
       return _pair(('상의', alert.topText), ('하의·신발', alert.bottomText));
     }
+    if (!alert.hasClothingDetail) {
+      // 목록에서 받은 경보: 상세를 읽기 전에는 옷차림을 알 수 없어요.
+      return _note(
+        failed ? failedText : loadingText,
+        button: loading ? null : '다시 시도',
+        loading: loading,
+      );
+    }
     if (!alert.hasOutfit) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          InfoTile(label: '옷차림', value: alert.outfitNote),
-          if (alert.aiPending) ...[
-            const SizedBox(height: 8),
-            AppButton(
-              label: '새로고침',
-              primary: false,
-              onPressed: () => onRefresh(),
-            ),
-          ],
-        ],
+      return _note(
+        alert.outfitNote,
+        button: alert.aiPending ? '새로고침' : null,
+        loading: loading && alert.aiPending,
       );
     }
     return Column(
@@ -276,6 +343,26 @@ class _OutfitTiles extends StatelessWidget {
       ],
     );
   }
+
+  Widget _note(String text, {String? button, bool loading = false}) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      InfoTile(label: '옷차림', value: text),
+      if (loading) ...[
+        const SizedBox(height: 8),
+        const Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      ] else if (button != null) ...[
+        const SizedBox(height: 8),
+        AppButton(label: button, primary: false, onPressed: () => onRefresh()),
+      ],
+    ],
+  );
 
   static Widget _pair((String, String) left, (String, String) right) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,

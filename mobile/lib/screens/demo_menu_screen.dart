@@ -9,6 +9,7 @@ import '../theme/app_text.dart';
 import '../widgets/load_state_view.dart';
 import '../widgets/loading_view.dart';
 import 'lock_screen.dart';
+import 'report_screen.dart';
 import 'server_settings_screen.dart';
 
 /// 시연용 첫 화면. 피그마 화면 01~07로 바로 갈 수 있어요.
@@ -85,12 +86,12 @@ class _DemoMenuScreenState extends State<DemoMenuScreen> {
             (
               '01',
               '잠금화면 · 접힌 알림',
-              _with(searching, (a) => _open(LockScreen.folded(alert: a))),
+              _withDetail(searching, (a) => LockScreen.folded(alert: a)),
             ),
             (
               '02',
               '잠금화면 · 펼친 알림',
-              _with(searching, (a) => _open(LockScreen.expanded(alert: a))),
+              _withDetail(searching, (a) => LockScreen.expanded(alert: a)),
             ),
             (
               '03',
@@ -105,17 +106,25 @@ class _DemoMenuScreenState extends State<DemoMenuScreen> {
             (
               '05',
               '실종 정보 상세',
-              _with(searching, (a) => AppRoutes.detail(context, a)),
+              _with(
+                searching,
+                (a) =>
+                    AppRoutes.detail(context, a, repository: widget.repository),
+              ),
             ),
             (
               '06',
               '목격 제보',
-              _with(searching, (a) => AppRoutes.report(context, a)),
+              _withDetail(searching, (a) => ReportScreen(alert: a)),
             ),
             (
               '07',
               '발견 완료 상세',
-              _with(found, (a) => AppRoutes.detail(context, a)),
+              _with(
+                found,
+                (a) =>
+                    AppRoutes.detail(context, a, repository: widget.repository),
+              ),
             ),
           ];
 
@@ -156,6 +165,26 @@ class _DemoMenuScreenState extends State<DemoMenuScreen> {
 
   VoidCallback? _with(MissingAlert? alert, void Function(MissingAlert) go) =>
       alert == null ? null : () => go(alert);
+
+  /// 서버 모드면 상세(/alerts/{id})를 읽어서 열어요. 목록에는 옷차림 칸이 없어서
+  /// 잠금화면 카드·목격 제보가 "정보 없음"으로 보이지 않게요.
+  /// 못 읽으면 목록에 있던 정보로 열어요.
+  VoidCallback? _withDetail(
+    MissingAlert? alert,
+    Widget Function(MissingAlert) screen,
+  ) => alert == null
+      ? null
+      : () async {
+          var a = alert;
+          if (_repo.isServer) {
+            try {
+              a = await _repo.loadOne(alert.id) ?? alert;
+            } catch (_) {
+              a = alert;
+            }
+          }
+          if (mounted) _open(screen(a));
+        };
 
   void _open(Widget screen) {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));

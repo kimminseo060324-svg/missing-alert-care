@@ -29,10 +29,16 @@ class _ReportScreenState extends State<ReportScreen> {
 
   String _when = _whenOptions.first;
   final _place = TextEditingController();
-  late final List<String> _features = [
-    widget.alert.clothingTop,
-    widget.alert.clothingBottom,
-  ].where((s) => s.isNotEmpty).toList();
+
+  /// 상의·하의. 없으면(목록에서 받은 경보 등) 서버 AI 요약 문장을 써요.
+  late final List<String> _features = () {
+    final a = widget.alert;
+    final own = [
+      a.clothingTop,
+      a.clothingBottom,
+    ].where((s) => s.isNotEmpty).toList();
+    return own.isNotEmpty ? own : a.aiSummary.take(3).toList();
+  }();
   final Set<String> _picked = {};
 
   @override
@@ -137,7 +143,11 @@ class _ReportScreenState extends State<ReportScreen> {
                                     const SizedBox(width: 8),
                                   Expanded(
                                     child: _FeatureTile(
-                                      label: f == a.clothingTop ? '상의' : '하의',
+                                      label: f == a.clothingTop
+                                          ? '상의'
+                                          : f == a.clothingBottom
+                                          ? '하의'
+                                          : f,
                                       text: f,
                                       on: _picked.contains(f),
                                       onTap: () => setState(
