@@ -3,4 +3,6 @@
     <!-- 앱 바탕색 -->
     <color name="ic_launcher_background">#F1F7F9</color>
     <color name="splash_background">#F1F7F9</color>
+    <!-- 푸시 알림 아이콘 색 (남색) -->
+    <color name="notification_color">#121D64</color>
 </resources>

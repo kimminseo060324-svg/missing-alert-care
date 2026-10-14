@@ -27,7 +27,18 @@ class _SplashScreenState extends State<SplashScreen> {
     super.initState();
     _timer = Timer(SplashScreen.duration, () {
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
+      final navigator = Navigator.of(context);
+      final route = ModalRoute.of(context)!;
+      // 첫 화면 도중에 푸시 알림으로 다른 화면이 위에 열렸으면
+      // 그 화면은 두고 아래의 첫 화면만 바꿔요.
+      if (!route.isCurrent) {
+        navigator.replace(
+          oldRoute: route,
+          newRoute: MaterialPageRoute(builder: (_) => widget.next),
+        );
+        return;
+      }
+      navigator.pushReplacement(
         PageRouteBuilder(
           pageBuilder: (_, _, _) => widget.next,
           transitionsBuilder: (_, animation, _, child) =>

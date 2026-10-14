@@ -1,7 +1,8 @@
 # 기억해줘 (Flutter 앱)
 
 실종경보 앱의 **뼈대**예요. 피그마 "기억해줘 시안"의 화면 01~07을 옮겼고,
-화면끼리 이동만 돼요. 푸시 알림과 서버 연결은 다음 단계에서 붙여요.
+화면끼리 이동되고, Firebase 푸시 알림(토픽 구독, 알림을 누르면 상세 화면)이 붙어 있어요.
+서버 연결은 다음 단계에서 붙여요.
 
 ## 내 컴퓨터에서 실행하기
 
@@ -10,7 +11,9 @@
    [fvm](https://fvm.app)을 쓰면 `fvm install`로 같은 버전을 받을 수 있어요. (fvm을 쓰면 아래 `flutter`를 `fvm flutter`로 바꿔 입력)
 2. 설치 확인: 터미널에서 `flutter --version`(3.41.9인지) → `flutter doctor` → 빨간 X가 없으면 준비 끝
 3. 안드로이드 폰을 USB로 연결하고 "USB 디버깅"을 켜요 (없으면 Android Studio의 에뮬레이터)
-4. 이 폴더에서:
+4. Firebase 설정 파일 `google-services.json`을 팀에게 받아서 `mobile/android/app/`에 넣어요.
+   이 파일이 없으면 빌드가 안 돼요. git에는 올리지 않아요(`.gitignore`에 있어요).
+5. 이 폴더에서:
 
 ```bash
 cd mobile
@@ -30,6 +33,7 @@ lib/
   theme/                 색상(app_colors), 글자(app_text), 테마
   models/missing_alert.dart   경보 한 건 (경찰청 API 필드 이름 그대로)
   data/alert_repository.dart  가짜 데이터 읽기
+  push/                  푸시 알림 (Firebase 연결, 토픽 구독, 알림 눌렀을 때 화면 열기)
   widgets/               공통 부품 (상태 칩, 태그, 버튼, 알림 카드, 옷차림 그림 …)
   screens/               화면 01~07
 assets/
@@ -57,4 +61,12 @@ assets/
 
 ## 아직 안 한 것
 
-- 182 전화 연결 (지금은 안내 메시지만 떠요), 지도, 푸시 알림, 서버 연결, AI 옷차림 그림
+- 182 전화 연결 (지금은 안내 메시지만 떠요), 지도, 서버 연결, AI 옷차림 그림
+- 앱을 보고 있는 중에 온 푸시를 화면 위에 띄우기 (지금은 앱이 백그라운드이거나 꺼져 있을 때만 알림이 떠요)
+
+## 푸시 알림
+
+- 토픽 `missing_alerts_osan`을 구독해요. 알림 채널 id는 `missing_alerts`예요 (`MainActivity.kt`에서 만들어요).
+- 서버가 보내는 data: `type`(`missing_alert`), `event`(`issued`/`closed`), `alert_id`(경찰청 식별번호), `status`, `region`, `version`, `lat`/`lng`(있을 때만). 값은 전부 문자열이에요.
+- 알림을 누르면 `alert_id`로 경보를 찾아 05 상세(발견 완료면 07)를 열고, 못 찾으면 04 목록을 열어요.
+- 확인: Firebase 콘솔 → Messaging → 새 캠페인 → 알림 → 대상을 주제 `missing_alerts_osan`으로, 추가 옵션의 맞춤 데이터에 `type`=`missing_alert`, `alert_id`=`9990001`을 넣고 보내요.
