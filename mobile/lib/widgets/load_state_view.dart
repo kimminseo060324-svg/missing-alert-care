@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 
+import '../screens/server_settings_screen.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import 'app_button.dart';
 
 /// 데이터를 못 읽었을 때 보여주는 안내 + "다시 시도" 버튼.
-/// [server]면 서버 연결 실패 안내를 보여 줘요.
+/// [server]면 서버 연결 실패 안내와 "서버 주소 바꾸기" 버튼을 보여 줘요.
+/// 서버 주소를 바꾸고 저장하면 바로 다시 시도해요.
 class LoadErrorView extends StatelessWidget {
   const LoadErrorView({super.key, required this.onRetry, this.server = false});
 
   static const message = '경보 데이터를 불러오지 못했습니다.';
   static const serverMessage = '서버에 연결하지 못했어요.';
-  static const serverHint = '서버가 켜져 있는지, 시연 메뉴의 서버 주소가 맞는지 확인해 주세요.';
+  static const hint = '잠시 후 다시 시도해 주세요.';
+  static const changeServerLabel = '서버 주소 바꾸기';
 
   final VoidCallback onRetry;
   final bool server;
@@ -33,7 +36,7 @@ class LoadErrorView extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              server ? serverHint : '잠시 후 다시 시도해 주세요.',
+              hint,
               textAlign: TextAlign.center,
               style: appText(13, color: AppColors.gray600),
             ),
@@ -42,10 +45,25 @@ class LoadErrorView extends StatelessWidget {
               width: 160,
               child: AppButton(label: '다시 시도', onPressed: onRetry),
             ),
+            if (server) ...[
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: () => _changeServer(context),
+                icon: const Icon(Icons.dns_outlined, size: 18),
+                label: const Text(changeServerLabel),
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _changeServer(BuildContext context) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const ServerSettingsScreen()),
+    );
+    if (changed == true) onRetry();
   }
 }
 
