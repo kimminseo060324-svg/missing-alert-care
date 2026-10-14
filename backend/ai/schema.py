@@ -101,6 +101,7 @@ _AI_SLOT = {
 AI_RESPONSE_SCHEMA = {
     "type": "object",
     "properties": {
+        "is_missing_alert": {"type": "boolean", "description": "실종자를 찾는 문자이면 true"},
         **{s: _AI_SLOT for s in SLOTS},
         "accessories": {"type": "array", "items": _AI_SLOT},
         "negatives": {"type": "array", "items": {"type": "object", "properties": {
@@ -108,7 +109,7 @@ AI_RESPONSE_SCHEMA = {
         "summary": {"type": "array", "maxItems": 3, "items": {"type": "object", "properties": {
             "text": {"type": "string"}, "evidence": _EVIDENCE}, "required": ["text", "evidence"]}},
     },
-    "required": [*SLOTS, "accessories", "negatives", "summary"],
+    "required": ["is_missing_alert", *SLOTS, "accessories", "negatives", "summary"],
 }
 
 

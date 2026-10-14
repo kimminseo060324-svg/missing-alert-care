@@ -211,35 +211,45 @@ def test_ai_without_key_exits_with_notice(monkeypatch):
 
 
 class _FakeClient:
-    def __init__(self, text=None, error=None):
+    """errors 목록을 차례로 던지고, 다 던진 뒤에는 text를 돌려준다."""
+
+    def __init__(self, text=None, errors=()):
         self.calls = []
+        pending = list(errors)
         outer = self
 
         class Models:
             def generate_content(self, model, contents, config):
                 outer.calls.append({"model": model, "contents": contents, "config": config})
-                if error:
-                    raise error
+                if pending:
+                    raise pending.pop(0)
                 return type("R", (), {"text": text})()
         self.models = Models()
 
 
+def _resp(**slots):
+    return json.dumps({"is_missing_alert": True, "upper": _slot(), "lower": _slot(), "shoes": _slot(),
+                       "accessories": [], "negatives": [], "summary": [], **slots}, ensure_ascii=False)
+
+
+def _api_error(code):
+    from google.genai import errors
+    return errors.ClientError(code, {"error": {"code": code, "message": "BODY-MARKER", "status": "X"}})
+
+
 def test_ai_extract_sends_redacted_text_with_schema_and_temperature_0():
-    resp = {"upper": _slot("점퍼", "회색", "회색점퍼"), "lower": _slot(), "shoes": _slot(),
-            "accessories": [], "negatives": [], "summary": []}
-    client = _FakeClient(text=json.dumps(resp, ensure_ascii=False))
-    out, dropped = extract_ai.extract(client, "양산동에서 실종된 김가상씨(남, 82세)를 찾습니다. 회색점퍼 ☎112[오산시]")
+    client = _FakeClient(text=_resp(upper=_slot("점퍼", "회색", "회색점퍼")))
+    out, dropped, is_missing = extract_ai.extract(client, "양산동에서 실종된 김가상씨(남, 82세)를 찾습니다. 회색점퍼 ☎112[오산시]")
     sent = client.calls[0]
     assert "김가상" not in sent["contents"] and "회색점퍼" in sent["contents"]
+    assert "찾습니다" in sent["contents"]  # 실종 판단을 위해 앞부분도 보낸다 (이름만 지움)
     assert sent["config"].temperature == 0 and sent["config"].response_json_schema
-    assert out["upper"] == {"type": "점퍼", "color": "회색"} and dropped == 0
+    assert out["upper"] == {"type": "점퍼", "color": "회색"} and dropped == 0 and is_missing is True
 
 
 def test_ai_error_hides_response_body():
-    from google.genai import errors
-    err = errors.ClientError(403, {"error": {"code": 403, "message": "BODY-MARKER", "status": "PERMISSION_DENIED"}})
     with pytest.raises(extract_ai.AIError) as e:
-        extract_ai.extract(_FakeClient(error=err), "회색점퍼")
+        extract_ai.extract(_FakeClient(errors=[_api_error(403)]), "회색점퍼", sleep=lambda s: None)
     assert "403" in str(e.value) and "BODY-MARKER" not in str(e.value)
     assert e.value.__cause__ is None and e.value.__suppress_context__
 
@@ -247,3 +257,76 @@ def test_ai_error_hides_response_body():
 def test_ai_non_json_response():
     with pytest.raises(extract_ai.AIError, match="JSON"):
         extract_ai.extract(_FakeClient(text="<html>BODY-MARKER</html>"), "회색점퍼")
+
+
+# 429 재시도 ---------------------------------------------------------------------
+
+def test_429_waits_and_retries_then_succeeds():
+    slept, logs = [], []
+    client = _FakeClient(text=_resp(), errors=[_api_error(429), _api_error(429)])
+    out, _, _ = extract_ai.extract(client, "회색점퍼", sleep=slept.append, log=logs.append)
+    assert slept == [15, 30] and len(client.calls) == 3
+    assert logs == ["429, 15초 후 재시도 (1/3)", "429, 30초 후 재시도 (2/3)"]
+    assert not any("BODY-MARKER" in m for m in logs)
+
+
+def test_429_gives_up_after_three_retries():
+    slept = []
+    client = _FakeClient(text=_resp(), errors=[_api_error(429)] * 4)
+    with pytest.raises(extract_ai.AIError) as e:
+        extract_ai.extract(client, "회색점퍼", sleep=slept.append, log=lambda m: None)
+    assert slept == [15, 30, 60] and len(client.calls) == 4
+    assert "429" in str(e.value) and "BODY-MARKER" not in str(e.value)
+
+
+def test_other_errors_are_not_retried():
+    slept = []
+    with pytest.raises(extract_ai.AIError):
+        extract_ai.extract(_FakeClient(errors=[_api_error(500)]), "회색점퍼", sleep=slept.append)
+    assert slept == []
+
+
+@pytest.mark.parametrize(("value", "expected"), [
+    (None, 4.0), ("", 4.0), ("abc", 4.0), ("-1", 4.0), ("0", 0.0), ("2.5", 2.5), ("10", 10.0), ("9999", 4.0),
+])
+def test_call_interval(monkeypatch, value, expected):
+    if value is None:
+        monkeypatch.delenv("GEMINI_CALL_INTERVAL_SEC", raising=False)
+    else:
+        monkeypatch.setenv("GEMINI_CALL_INTERVAL_SEC", value)
+    assert extract_ai.call_interval() == expected
+
+
+# 중간 저장·이어하기 --------------------------------------------------------------------
+
+def test_run_ai_saves_progress_and_resumes(monkeypatch, tmp_path):
+    from ai import run_eval
+    monkeypatch.setattr(evaluate, "RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(extract_ai, "get_client", lambda: object())
+    monkeypatch.setattr(extract_ai, "call_interval", lambda: 0)
+    labels = {sn: EVAL_LABELS[sn] for sn in sorted(EVAL_LABELS)[:4]}
+    called, fail_on = [], {sorted(labels)[2]}
+
+    def fake_extract(client, text, log=print):
+        sn = next(s for s in labels if EVAL_MSGS[s] == text)
+        called.append(sn)
+        if sn in fail_on:
+            raise extract_ai.AIError("Gemini API 오류 (HTTP 429, 3번 재시도 후)")
+        return label_to_output(labels[sn]), 0, True
+    monkeypatch.setattr(extract_ai, "extract", fake_extract)
+
+    with pytest.raises(SystemExit) as e:  # 세 번째에서 멈춤
+        run_eval.run_ai(EVAL_MSGS, labels)
+    assert "다시 실행하면 이어서" in str(e.value)
+    cache = json.loads(next(tmp_path.glob("ai-cache-*.json")).read_text(encoding="utf-8"))
+    assert len(cache) == 2 and all(v["is_missing"] for v in cache.values())
+
+    fail_on.clear()
+    called.clear()
+    preds, judged = run_eval.run_ai(EVAL_MSGS, labels)  # 다시 실행: 받은 2건은 건너뜀
+    assert called == sorted(labels)[2:]
+    assert len(preds) == 4 and all(judged.values())
+
+    called.clear()
+    run_eval.run_ai(EVAL_MSGS, labels, fresh=True)  # --fresh 는 처음부터
+    assert called == sorted(labels)
