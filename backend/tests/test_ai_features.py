@@ -274,21 +274,6 @@ def test_clothing_label_without_color():
     assert c["shoes"] == ["운동화"] and c["accessories"] == ["지팡이"]
 
 
-def test_old_cache_file_is_converted_to_strings(gemini, monkeypatch):
-    """예전 형식({type, color})으로 저장된 캐시 파일도 문자열로 바꿔 쓴다."""
-    import json
-    text = "회색 점퍼 남성을 찾습니다"
-    monkeypatch.setattr(ai_features, "source_text", lambda raw: text)
-    old = {"clothing": {"upper": [{"type": "점퍼", "color": "회색"}], "lower": [], "shoes": [],
-                        "accessories": [{"type": "지팡이", "color": ""}]},
-           "summary": ["회색 점퍼"], "extracted_at": "2026-10-15T00:00:00+09:00"}
-    ai_features.CACHE_PATH.write_text(json.dumps({ai_features._key(text): old}, ensure_ascii=False), encoding="utf-8")
-    with TestClient(app) as c:
-        ai = c.get("/alerts/9990001").json()["ai"]
-    assert ai["status"] == "done" and ai["clothing"]["upper"] == ["회색 점퍼"] and ai["clothing"]["accessories"] == ["지팡이"]
-    assert gemini.calls == []
-
-
 def test_shutdown_does_not_wait_for_running_call(gemini):
     """Gemini 호출(재시도 대기 포함)이 길어져도 서버 종료는 기다리지 않는다."""
     gemini.gate = threading.Event()  # 열지 않음 → 가짜 호출이 5초 동안 멈춰 있음
@@ -297,3 +282,98 @@ def test_shutdown_does_not_wait_for_running_call(gemini):
         t = time.monotonic()
     assert time.monotonic() - t < 2
     gemini.gate.set()
+
+
+
+# 캐시 키에 설정(모델·프롬프트·스키마) 포함 -----------------------------------------------
+
+def run_server():
+    """서버를 한 번 켰다 끈다 (가상 경보 6건 추출이 끝날 때까지). 끈 뒤 메모리 캐시를 비워 재시작을 흉내 낸다."""
+    with TestClient(app):
+        assert wait_until(all_settled)
+    ai_features._cache.clear()
+    ai_features._results.clear()
+
+
+def test_same_config_same_text_reuses_file_cache(gemini):
+    run_server()
+    run_server()  # 재시작: 파일 캐시에서 읽어 다시 부르지 않음
+    assert len(gemini.calls) == len(SIDS)
+
+
+@pytest.mark.parametrize("change", ["model", "prompt", "schema", "colors"])
+def test_config_change_extracts_again(gemini, monkeypatch, change):
+    run_server()
+    before = ai_features.config_hash()
+    if change == "model":
+        monkeypatch.setenv("GEMINI_MODEL", "other-model")
+    elif change == "prompt":
+        monkeypatch.setattr(ai_features.extract_ai, "PROMPT", ai_features.extract_ai.PROMPT + "\n10. 추가 규칙")
+    elif change == "colors":  # 프롬프트에 채워 넣는 표준 색 목록만 바뀜 (PROMPT 템플릿은 그대로)
+        monkeypatch.setattr(ai_features.extract_ai, "STANDARD_COLORS", ai_features.extract_ai.STANDARD_COLORS + ["새색"])
+    else:
+        schema = {**ai_features.extract_ai.AI_RESPONSE_SCHEMA, "description": "바뀐 스키마"}
+        monkeypatch.setattr(ai_features.extract_ai, "AI_RESPONSE_SCHEMA", schema)
+    assert ai_features.config_hash() != before
+    run_server()
+    assert len(gemini.calls) == 2 * len(SIDS)  # 설정이 바뀌어 모두 새로 추출
+
+
+def test_cache_file_has_hashes_only(gemini):
+    import json
+    run_server()
+    text = ai_features.CACHE_PATH.read_text(encoding="utf-8")
+    data = json.loads(text)
+    assert len(data) == len(SIDS)
+    assert all(set(r) == {"config", "clothing", "summary", "extracted_at"} for r in data.values())
+    assert all(r["config"] == ai_features.config_hash() for r in data.values())
+    assert ai_features.extract_ai.model_name() not in text  # 모델명 원문 없음
+    assert "재난문자를 읽고" not in text and "찾습니다" not in text  # 프롬프트·문자 원문 없음
+
+
+@pytest.mark.parametrize("content", [
+    "OLD",  # 예전 형식: 설정 해시 없음, 옷 칸이 {type, color}
+    '[1, 2, 3]',  # 객체가 아님
+    '{"x": "not-an-object"}',
+    'not json',
+])
+def test_old_or_broken_cache_file_is_ignored(gemini, logs, content):
+    import json
+    if content == "OLD":
+        text = "회색 점퍼 남성을 찾습니다"
+        old = {"clothing": {"upper": [{"type": "점퍼", "color": "회색"}], "lower": [], "shoes": [], "accessories": []},
+               "summary": ["회색 점퍼"], "extracted_at": "2026-10-15T00:00:00+09:00"}
+        texts = [ai_features.source_text({"msspsnIdntfccd": s}) for s in SIDS]
+        keys = [ai_features._sha(ai_features.redact(t)) for t in texts]  # 예전 키 방식 (문장만)
+        keys += [ai_features._key(t, ai_features.config_hash()) for t in texts + [text]]  # 지금 키지만 설정 해시 없음
+        content = json.dumps({k: old for k in keys})
+    ai_features.CACHE_PATH.write_text(content, encoding="utf-8")
+    run_server()  # 오류 없이 켜지고
+    assert len(gemini.calls) == len(SIDS)  # 전부 새로 추출
+    data = json.loads(ai_features.CACHE_PATH.read_text(encoding="utf-8"))  # 새 형식으로 다시 저장됨
+    assert all(r.get("config") == ai_features.config_hash() for r in data.values())
+    assert not any("Traceback" in m for m in logs)
+
+
+
+@pytest.mark.parametrize("entry", [
+    {"clothing": {"upper": "회색 점퍼", "lower": [], "shoes": [], "accessories": []}, "summary": [], "extracted_at": "t"},
+    {"clothing": {"upper": [], "lower": [], "shoes": [], "accessories": []}, "summary": "회색 점퍼", "extracted_at": "t"},
+    {"clothing": {"upper": [], "lower": [], "shoes": [], "accessories": []}, "summary": ["a", "b", "c", "d"],
+     "extracted_at": "t"},
+    {"clothing": {"upper": [], "lower": [], "shoes": []}, "summary": [], "extracted_at": "t"},
+    {"clothing": {"upper": [1], "lower": [], "shoes": [], "accessories": []}, "summary": [], "extracted_at": "t"},
+    {"clothing": [], "summary": [], "extracted_at": "t"},
+    {"clothing": {"upper": [], "lower": [], "shoes": [], "accessories": []}, "summary": [], "extracted_at": None},
+])
+def test_wrong_shape_entry_with_current_config_is_ignored(gemini, entry):
+    """설정 해시가 맞아도 모양이 틀린 항목(문자열 칸, 요약 4개 등)은 버리고 새로 추출한다."""
+    import json
+    keys = [ai_features._key(ai_features.source_text({"msspsnIdntfccd": s}), ai_features.config_hash()) for s in SIDS]
+    ai_features.CACHE_PATH.write_text(json.dumps({k: {"config": ai_features.config_hash(), **entry} for k in keys}),
+                                      encoding="utf-8")
+    with TestClient(app) as c:
+        assert wait_until(all_settled)
+        for it in c.get("/alerts").json()["list"]:
+            check_shape(it["ai"], full=False)
+    assert len(gemini.calls) == len(SIDS)

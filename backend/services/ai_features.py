@@ -6,8 +6,12 @@
   재시도 대기까지 끝날 때까지 종료가 멈춘다).
 - AI에 보내는 글: sample은 같은 사람의 가상 재난문자(disaster-messages-labels.json의 linked_msspsnIdntfccd),
   safe182는 재난문자 연동이 없어 보낼 글이 없다 → unavailable.
-- 캐시: 개인정보를 지운 문장(preprocess.redact)의 sha256 → 결과. 메모리 기본,
-  DATA_SOURCE=sample일 때만 results/ai_cache.json에도 저장한다 (safe182는 파일 저장 금지).
+- 캐시 키: sha256(설정 해시 + 개인정보를 지운 문장(preprocess.redact)).
+  설정 해시 = sha256(모델명 + 프롬프트 해시 + JSON 스키마 해시). 프롬프트·스키마는 extract_ai에 있는 실제 값으로
+  계산하므로, 모델(GEMINI_MODEL)·프롬프트·스키마 중 하나라도 바뀌면 키가 바뀌어 새로 추출한다 (버전 번호 불필요).
+- 캐시는 메모리 기본, DATA_SOURCE=sample일 때만 results/ai_cache.json에도 저장한다 (safe182는 파일 저장 금지).
+  파일에는 항목마다 설정 해시만 함께 저장한다 (모델명·프롬프트 원문은 저장하지 않음).
+  읽을 때 설정 해시가 지금과 다르거나 없거나 모양이 틀린 항목은 버린다 → 새로 추출.
 - AI_EXTRACT_ENABLED(기본 sample=1, safe182=0)가 꺼져 있거나 GEMINI_API_KEY가 없거나 호출이 실패하면 unavailable.
   예외는 밖으로 내보내지 않고, 로그에는 건수·오류 종류만 남긴다 (원문·키·응답 없음).
 """
@@ -40,8 +44,8 @@ if not log.handlers:
 
 _lock = threading.Lock()
 _results = {}  # 식별번호 → {"status", "clothing", "summary", "extracted_at"}
-_cache = {}  # sha256(개인정보 지운 문장) → {"clothing", "summary", "extracted_at"}
-_waiting = {}  # 추출 대기 중인 키 → (문장, [식별번호])
+_cache = {}  # 캐시 키 → (설정 해시, {"clothing", "summary", "extracted_at"})
+_waiting = {}  # 추출 대기 중인 키 → (문장, 설정 해시, [식별번호])
 _loop = None
 _queue = None
 _task = None
@@ -88,27 +92,37 @@ def source_text(raw):
     return _texts.get(raw.get("msspsnIdntfccd"))
 
 
-def _key(text):
-    return hashlib.sha256(redact(text).encode("utf-8")).hexdigest()
+def _sha(text):
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def _label(item):
-    """{type, color} → "회색 점퍼" (색이 없으면 "지팡이"). 이미 문자열이면 그대로."""
-    if isinstance(item, str):
-        return item
-    return f"{item.get('color') or ''} {item.get('type') or ''}".strip()
+def config_hash():
+    """지금 쓰는 모델명·프롬프트·JSON 스키마의 해시. 코드나 GEMINI_MODEL이 바뀌면 값이 바뀐다.
+    프롬프트는 템플릿(PROMPT)이 아니라 실제로 보내는 모양(build_prompt, 표준 색 목록이 채워진 것)으로 계산한다.
+    문장 자리는 비워 두므로 경보마다 달라지지 않는다."""
+    schema = json.dumps(extract_ai.AI_RESPONSE_SCHEMA, sort_keys=True, ensure_ascii=False)
+    prompt = extract_ai.build_prompt("")
+    return _sha("\n".join([extract_ai.model_name(), _sha(prompt), _sha(schema)]))
 
 
-def _labels(clothing):
-    """옷 칸마다 문자열 목록으로. 예전 형식({type, color})으로 저장된 캐시도 이걸로 바꾼다."""
-    return {s: [x for x in map(_label, clothing.get(s) or []) if x] for s in SLOTS}
+def _key(text, config):
+    return _sha(config + "\n" + redact(text))
+
+
+def _valid(r):
+    """캐시 파일 항목이 지금 응답 모양인지 (옷 칸은 문자열 목록, 요약은 3개 이하 문자열 목록)."""
+    def strings(v):
+        return isinstance(v, list) and all(isinstance(x, str) for x in v)
+    c = r.get("clothing")
+    return (isinstance(c, dict) and all(strings(c.get(s)) for s in SLOTS)
+            and strings(r.get("summary")) and len(r["summary"]) <= 3 and isinstance(r.get("extracted_at"), str))
 
 
 def _to_result(out):
-    """extract_ai.verify 출력 → 응답 모양 (옷 칸은 "색 종류" 문자열 목록, 요약은 최대 3개)."""
-    clothing = {s: [out[s]] if out.get(s, {}).get("type") else [] for s in ("upper", "lower", "shoes")}
-    clothing["accessories"] = list(out.get("accessories") or [])
-    clothing = _labels(clothing)
+    """extract_ai.verify 출력 → 응답 모양 (옷 칸은 "색 종류" 문자열 목록, 색이 없으면 종류만. 요약은 최대 3개)."""
+    items = {s: [out[s]] if out.get(s, {}).get("type") else [] for s in ("upper", "lower", "shoes")}
+    items["accessories"] = list(out.get("accessories") or [])
+    clothing = {s: [f"{i.get('color') or ''} {i.get('type') or ''}".strip() for i in items[s]] for s in SLOTS}
     return {"clothing": clothing, "summary": list(out.get("summary") or [])[:3],
             "extracted_at": datetime.now(KST).isoformat()}
 
@@ -132,16 +146,17 @@ def submit(raws):
                 if _results.get(sid, {}).get("status") != "done":
                     _results[sid] = _empty("unavailable")
             continue
-        key = _key(text)
+        config = config_hash()
+        key = _key(text, config)
         with _lock:
             if key in _cache:
-                _results[sid] = {"status": "done", **_cache[key]}
+                _results[sid] = {"status": "done", **_cache[key][1]}
                 continue
             _results[sid] = _empty("pending")
             if key in _waiting:
-                _waiting[key][1].append(sid)
+                _waiting[key][2].append(sid)
                 continue
-            _waiting[key] = (text, [sid])
+            _waiting[key] = (text, config, [sid])
         try:
             _loop.call_soon_threadsafe(_queue.put_nowait, key)
         except (RuntimeError, AttributeError):  # 서버가 꺼지는 중 (루프가 닫힘)
@@ -179,7 +194,7 @@ async def _worker():
     while True:
         key = await _queue.get()
         with _lock:
-            text, _ = _waiting.get(key, (None, []))
+            text, config, _ = _waiting.get(key, (None, None, []))
         if text is None:
             continue
         if called:
@@ -187,12 +202,12 @@ async def _worker():
         called = True
         result = await _in_daemon_thread(_extract_safe, text)
         with _lock:
-            _, sids = _waiting.pop(key, (None, []))
+            _, _, sids = _waiting.pop(key, (None, None, []))
             for sid in sids:
                 _results[sid] = {"status": "done", **result} if result else _empty("unavailable")
             if result:
-                _cache[key] = result
-                snapshot = dict(_cache)
+                _cache[key] = (config, result)
+                snapshot = {k: {"config": c, **r} for k, (c, r) in _cache.items()}
         if result and _save_file():
             _write_cache(snapshot)
         log.info("AI 추출 %s (경보 %d건)", "완료" if result else "실패", len(sids))
@@ -213,9 +228,17 @@ def start():
     global _loop, _queue, _task
     if _save_file() and CACHE_PATH.exists():
         try:
+            data = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
+            data = data if isinstance(data, dict) else {}
+            config, kept = config_hash(), 0
             with _lock:
-                for key, r in json.loads(CACHE_PATH.read_text(encoding="utf-8")).items():
-                    _cache[key] = {**r, "clothing": _labels(r.get("clothing") or {})}
+                for key, r in data.items():
+                    # 설정 해시가 다르거나 없거나(예전 형식) 모양이 틀린 항목은 버린다 → 새로 추출
+                    if isinstance(r, dict) and r.get("config") == config and _valid(r):
+                        _cache[key] = (config, {k: r[k] for k in ("clothing", "summary", "extracted_at")})
+                        kept += 1
+            if kept < len(data):
+                log.info("AI 캐시 %d건 중 %d건은 설정이 다르거나 형식이 맞지 않아 쓰지 않습니다", len(data), len(data) - kept)
         except (OSError, ValueError) as e:
             log.warning("AI 캐시 파일을 읽지 못해 새로 시작합니다 (%s)", type(e).__name__)
     _loop, _queue = asyncio.get_running_loop(), asyncio.Queue()
