@@ -38,16 +38,33 @@ def _now():
     return datetime.now(KST)
 
 
+def _parse_occrde(value):
+    """발생일(YYYYMMDD)을 KST 0시 datetime으로 바꾼다. 누락·형식 오류·없는 날짜면 None."""
+    text = str(value).strip() if value is not None else ""
+    if len(text) != 8 or not text.isdigit():
+        return None
+    try:
+        return datetime.strptime(text, "%Y%m%d").replace(tzinfo=KST)
+    except ValueError:  # 20260230처럼 없는 날짜
+        return None
+
+
+def _issued_at(raw):
+    """시연용으로 다시 발령한 시각, 없으면 발생일 0시, 발생일도 잘못됐으면 None."""
+    st = _state.get(raw["msspsnIdntfccd"], {})
+    return st.get("issued_at") or _parse_occrde(raw.get("occrde"))
+
+
 def _enrich(raw):
     """원본 항목에 추가 필드를 붙인다. 원본 딕셔너리는 바꾸지 않는다."""
     sid = raw["msspsnIdntfccd"]
     st = _state.get(sid, {})
-    occr = datetime.strptime(raw["occrde"], "%Y%m%d").replace(tzinfo=KST)
+    issued = _issued_at(raw)
     return {
         **raw,
         "occrAdres": (raw.get("occrAdres") or "").strip(),
         "status": st.get("status", source.status_of(raw)),
-        "issued_at": st.get("issued_at", occr).isoformat(),  # 발령 시각이 없으면 발생일 0시
+        "issued_at": issued.isoformat() if issued else None,
         "found_at": st["found_at"].isoformat() if st.get("found_at") else None,
         "target_label": TARGET_LABELS.get(raw.get("writngTrgetDscd"), "기타"),
         "photo_url": None,
@@ -70,22 +87,26 @@ def _find(sid):
 
 @router.get("/alerts", tags=["alerts"], summary="경보 목록")
 def list_alerts(
-    days: int = Query(7, ge=1, description="최근 며칠 안에 발령된 경보만"),
-    status: Status | None = Query(None, description="수색중 / 발견완료"),
+    days: int | None = Query(None, ge=1, le=36500, description="최근 며칠 안에 발령된 경보만 (생략하면 전체)"),
+    status: Status | None = Query(None, description="수색중 / 경보종료(실제 모드) / 발견완료(시연용)"),
 ):
     raws, notice = source.load_alerts()
-    since = _now() - timedelta(days=days)
-    items = []
+    # 가상 데이터는 발생일이 고정이라, 기본값으로 날짜를 거르면 시간이 지나 목록이 비어 버린다.
+    since = _now() - timedelta(days=days) if days is not None else None
+    rows = []
     for raw in raws:
         if _expired(_state.get(raw["msspsnIdntfccd"], {})):
             continue
-        item = _enrich(raw)
-        if datetime.fromisoformat(item["issued_at"]) < since:
+        issued = _issued_at(raw)
+        if since is not None and (issued is None or issued < since):  # 날짜를 모르면 거를 수 없어 뺀다
             continue
+        item = _enrich(raw)
         if status and item["status"] != status.value:
             continue
-        items.append(item)
-    items.sort(key=lambda x: x["issued_at"], reverse=True)
+        rows.append((issued, item))
+    # 최근 발령 순, 날짜를 모르는 경보는 맨 뒤
+    rows.sort(key=lambda r: (r[0] is not None, r[0] or datetime.min.replace(tzinfo=KST)), reverse=True)
+    items = [item for _, item in rows]
     return {"notice": notice, "is_sample": source.IS_SAMPLE, "totalCount": len(items), "list": items}
 
 
