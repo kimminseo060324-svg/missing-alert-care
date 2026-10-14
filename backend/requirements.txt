@@ -6,3 +6,4 @@ python-dotenv==1.2.4
 # tests (pytest backend)
 pytest==9.1.1
 httpx2==2.13.1
+google-genai==2.30.1

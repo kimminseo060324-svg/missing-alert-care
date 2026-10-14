@@ -142,3 +142,6 @@ build/
 .vscode/
 venv/
 *.apk
+
+# AI 옷차림 추출 평가 결과
+results/
