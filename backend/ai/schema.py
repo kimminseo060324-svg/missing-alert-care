@@ -14,6 +14,7 @@
 색은 표준색으로 모은다. 곤색·네이비·남색 → 남색, 청색은 남색과 다른 색으로 둔다.
 """
 import re
+from difflib import SequenceMatcher
 
 SLOTS = ("upper", "lower", "shoes")
 PART_TO_SLOT = {"상의": "upper", "전신": "upper", "하의": "lower", "신발": "shoes"}
@@ -41,6 +42,23 @@ COLOR_ALIASES = {
     "주황": "주황색", "주황색": "주황색",
 }
 STANDARD_COLORS = sorted(set(COLOR_ALIASES.values()))
+
+# 같은 옷을 가리키는 다른 표현 → 비교용 표준 표현. 채점(evaluate)과 AI 근거 검증에만 쓴다.
+# (규칙 추출기 단어 목록에는 넣지 않는다: 평가용 문자에 맞춰 규칙을 고치면 평가가 의미 없어진다)
+TYPE_SYNONYMS = {
+    "츄리닝": "트레이닝", "추리닝": "트레이닝", "트레이닝복": "트레이닝",
+    "쓰레빠": "슬리퍼", "슬리파": "슬리퍼",
+    "반소매티셔츠": "반소매티셔츠", "반팔티셔츠": "반소매티셔츠", "반팔티": "반소매티셔츠", "반팔": "반소매티셔츠",
+    "체크무늬": "체크", "남방": "셔츠",
+    "가디건": "카디건", "잠바": "점퍼", "스니커즈": "운동화",
+    "휴대폰": "휴대폰", "핸드폰": "휴대폰", "휴대전화": "휴대폰", "폰": "휴대폰",
+}
+_SYN_RE = re.compile("|".join(sorted(map(re.escape, TYPE_SYNONYMS), key=len, reverse=True)))
+
+
+def canonical_type(text):
+    """띄어쓰기를 빼고 다른 표현을 표준 표현으로 바꾼다 (비교용)."""
+    return _SYN_RE.sub(lambda m: TYPE_SYNONYMS[m.group(0)], re.sub(r"\s+", "", text or ""))
 
 
 def normalize_color(text):
@@ -122,6 +140,36 @@ def grounded(evidence, text):
     return bool(e) and e in _squash(text)
 
 
+# 색 표준표에는 없지만 문자에 쓰일 수 있는 색 표현 (AI 근거 검증에서 "근거에 색이 적혀 있다"고 볼 때만 쓴다)
+OTHER_COLOR_WORDS = ("아이보리", "와인", "버건디", "민트", "올리브", "크림", "차콜", "오트밀", "머스타드", "라벤더", "코랄", "브라운")
+
+
+def type_in_evidence(typ, evidence):
+    """옷 종류가 근거 문구에서 나온 것인지. 다른 표현(츄리닝→트레이닝)과 오타 한 글자 정도는 허용:
+    표준 표현으로 바꾼 뒤 가장 긴 공통 부분이 종류 길이의 절반 이상(최소 2글자)이어야 한다."""
+    t, e = canonical_type(typ), canonical_type(evidence)
+    if not t:
+        return False
+    m = SequenceMatcher(None, t, e).find_longest_match(0, len(t), 0, len(e))
+    if m.size >= max(2, -(-len(t) // 2)):
+        return True
+    # 두 글자 단어의 한 글자 오타 (잠퍼 → 점퍼): 근거 안에 같은 길이에 한 글자만 다른 부분이 있으면 인정
+    return len(t) >= 2 and any(
+        sum(a != b for a, b in zip(t, e[i:i + len(t)])) == 1 for i in range(len(e) - len(t) + 1))
+
+
+def color_in_evidence(color, evidence):
+    """색을 지어내지 않았는지. 색이 없으면 통과. 있으면 근거에 그 색 표현, 또는 표준표에 없는 색 표현
+    ("~색", 아이보리·와인 등)이 있어야 한다."""
+    if not color:
+        return True
+    ev = _squash(evidence)
+    if any(alias in ev for alias, std in COLOR_ALIASES.items() if std == color):
+        return True
+    known = [a for a in COLOR_ALIASES if a in ev]
+    return not known and (bool(re.search(r"[가-힣]+색", ev)) or any(w in ev for w in OTHER_COLOR_WORDS))
+
+
 def verify_ai_response(resp, text):
     """AI 응답(근거 포함)을 원문으로 검증해 출력 형식으로 바꾼다.
 
@@ -132,13 +180,9 @@ def verify_ai_response(resp, text):
 
     def slot_ok(s):
         ev = s.get("evidence", "")
-        if not s.get("type"):
+        if not s.get("type") or not grounded(ev, text) or not type_in_evidence(s["type"], ev):
             return False
-        if not grounded(ev, text) or not grounded(s["type"], ev):
-            return False
-        color = normalize_color(s.get("color"))
-        # 색은 근거 안에 그 색을 뜻하는 표현이 있어야 인정
-        return not color or any(c in _squash(ev) for c, std in COLOR_ALIASES.items() if std == color)
+        return color_in_evidence(normalize_color(s.get("color")), ev)
 
     for slot in SLOTS:
         s = resp.get(slot) or {}

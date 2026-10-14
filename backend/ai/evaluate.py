@@ -1,30 +1,28 @@
 """추출 결과(규칙 또는 AI)를 정답과 필드별로 비교해 정확도를 계산한다.
 
 비교 기준
-- 옷 종류: 띄어쓰기를 무시하고 같거나, 한쪽이 다른 쪽을 포함하면 정답 (예: 블라우스 ⊂ 꽃무늬 블라우스).
+- 옷 종류: 띄어쓰기를 무시하고, 같은 옷의 다른 표현(츄리닝=트레이닝, 쓰레빠=슬리퍼, 반팔=반소매 티셔츠, 남방=셔츠 등,
+  schema.TYPE_SYNONYMS)을 같게 본 뒤, 같거나 한쪽이 다른 쪽을 포함하면 정답 (예: 블라우스 ⊂ 꽃무늬 블라우스).
   upper·lower·shoes 3칸 × 문자 수. 둘 다 비어 있으면 정답.
-- 색상: 정답에 옷이 있는 칸만. 표준색이 같으면 정답 (정답 색이 없으면 빈 값이어야 정답).
-- 소지품·부정 표현: 문자마다 항목 묶음이 정답과 같으면 정답.
-- 전체 필드: 문자 하나의 옷 3칸(종류·색), 소지품, 부정 표현이 모두 맞으면 정답.
-- 환각: 결과에 넣은 항목(옷 칸·소지품·부정 표현) 중 정답에 없는 항목의 비율. 낮을수록 좋다.
+- 색상: 정답에 색이 적혀 있는 칸만 채점한다. 표준색이 같으면 정답. 정답에 색이 없는 칸("색 정보 없음")은 채점에서 뺀다.
+- 소지품·부정 표현: 문자마다 항목 묶음이 정답과 같으면 정답 (소지품 색도 정답에 색이 있을 때만 본다).
+- 전체 필드: 문자 하나의 옷 3칸(종류, 채점하는 색), 소지품, 부정 표현이 모두 맞으면 정답.
+- 환각: 결과에 넣은 항목(옷 칸·소지품·부정 표현, 그리고 정답에 색이 없는 칸에 붙인 색) 중
+  정답에 없는 것의 비율. 낮을수록 좋다. 색을 채점에서 빼는 칸이라도 색을 지어내면 여기서 잡는다.
 - 요약 근거 없음: summary 중 원문에 없는 문구의 비율 (summary는 정답이 없어 근거만 본다).
 """
 import json
-import re
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from .schema import SLOTS, grounded, normalize_color
+from .schema import SLOTS, canonical_type, grounded, normalize_color
 
 RESULTS_DIR = Path(__file__).resolve().parents[2] / "results"
 
 
-def _squash(s):
-    return re.sub(r"\s+", "", s or "")
-
-
 def type_match(pred, gold):
-    p, g = _squash(pred), _squash(gold)
+    p, g = canonical_type(pred), canonical_type(gold)
     if p == g:
         return True
     return bool(p and g) and min(len(p), len(g)) >= 2 and (p in g or g in p)
@@ -47,20 +45,30 @@ def _match_list(pred, gold, key=lambda x: x):
 def compare(pred, gold, text=""):
     """문자 하나 비교. 필드별 맞음 여부와 환각 수를 돌려준다."""
     r = {"slots": {}, "hallucinated": 0, "predicted": 0, "summary_total": 0, "summary_ungrounded": 0}
+    def invented_color(p_color, g_color):  # 정답에 색이 없는데 색을 붙였는가
+        return bool(normalize_color(p_color)) and not normalize_color(g_color)
+
     for s in SLOTS:
         p, g = pred[s], gold[s]
         t_ok = (not p["type"] and not g["type"]) or (bool(p["type"]) and bool(g["type"]) and type_match(p["type"], g["type"]))
-        c_ok = normalize_color(p["color"]) == normalize_color(g["color"]) if g["type"] else None
+        c_ok = normalize_color(p["color"]) == normalize_color(g["color"]) if normalize_color(g["color"]) else None
         r["slots"][s] = {"type": t_ok, "color": c_ok}
         if p["type"]:
             r["predicted"] += 1
             r["hallucinated"] += not g["type"] or not type_match(p["type"], g["type"])
+        if invented_color(p["color"], g["color"]):
+            r["predicted"] += 1
+            r["hallucinated"] += 1
 
     pairs, extra, missing = _match_list(pred["accessories"], gold["accessories"], key=lambda x: x["type"])
     r["accessories"] = not extra and not missing and all(
-        normalize_color(p["color"]) == normalize_color(g["color"]) for p, g in pairs)
+        normalize_color(p["color"]) == normalize_color(g["color"]) for p, g in pairs if normalize_color(g["color"]))
     r["predicted"] += len(pred["accessories"])
     r["hallucinated"] += len(extra)
+    for p, g in pairs:
+        if invented_color(p["color"], g["color"]):
+            r["predicted"] += 1
+            r["hallucinated"] += 1
 
     _, extra_n, missing_n = _match_list(pred["negatives"], gold["negatives"])
     r["negatives"] = not extra_n and not missing_n
@@ -134,6 +142,26 @@ def save(name, payload):
     path = RESULTS_DIR / f"eval-{name}-{datetime.now():%Y%m%d-%H%M%S}.json"
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
+
+
+def by_hard_case(wrong, labels):
+    """특이 표현(hard_cases)별로 (문자 수, 틀린 문자 수, 틀린 칸 목록)을 모은다. 특이 표현이 없는 문자는 "(없음)"."""
+    groups = defaultdict(lambda: {"messages": 0, "wrong": 0, "fields": []})
+    for sn, label in labels.items():
+        for tag in label.get("hard_cases") or ["(없음)"]:
+            g = groups[tag]
+            g["messages"] += 1
+            if sn in wrong:
+                g["wrong"] += 1
+                g["fields"] += wrong[sn]
+    return dict(sorted(groups.items(), key=lambda kv: -kv[1]["messages"]))
+
+
+def print_hard_cases(groups):
+    print(f"{'특이 표현':<10}{'문자':>6}{'틀림':>6}  틀린 칸")
+    for tag, g in groups.items():
+        fields = ", ".join(f"{f}×{g['fields'].count(f)}" for f in sorted(set(g["fields"]))) or "-"
+        print(f"{tag:<10}{g['messages']:>6}{g['wrong']:>6}  {fields}")
 
 
 def self_test(golds):

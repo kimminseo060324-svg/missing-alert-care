@@ -15,7 +15,7 @@ from .preprocess import clothing_part
 from .schema import AI_RESPONSE_SCHEMA, STANDARD_COLORS, verify_ai_response
 
 ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
-DEFAULT_MODEL = "gemini-3.8-flash"  # 안정(Stable) Flash, 2026-09 기준
+DEFAULT_MODEL = "gemini-3.5-flash-lite"  # 안정(Stable) Flash-Lite, 구조화 출력 지원 (2026-07 업데이트)
 
 PROMPT = """너는 실종자 찾기 문자에서 인상착의(옷차림)만 뽑아 JSON으로 정리한다.
 
