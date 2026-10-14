@@ -1,7 +1,8 @@
 """안전Dream 실종경보 주기 조회와 신규·종료 판단 (DATA_SOURCE=safe182일 때만 동작).
 
 - 서버를 켠 뒤 처음 받은 목록은 기준으로만 저장한다 (신규 아님, 푸시 대상 아님).
-- 이후 처음 보는 식별번호이면서 발생일이 최근 7일 이내면 신규 경보 → on_new_alert().
+- 이후 처음 보는 식별번호이면서 발생일이 최근 7일 이내면 신규 경보 → on_new_alert()로 issued 푸시.
+- 경보종료로 바뀌면 closed 푸시. 발송이 실패하면 다음 회차에 다시 보낸다 (성공해야 notified=True).
 - 한 번 본 식별번호는 다시 신규로 보지 않는다.
 - 목록에서 3번 연속 빠지면 "경보종료", 다시 나오면 "수색중". 경보종료는 3일 뒤 응답에서 빠진다.
 - 로그에는 건수와 상태 변화 개수만 남긴다. 이름·주소·사진·키·응답 본문은 남기지 않는다.
@@ -16,7 +17,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from services import safe182
+from services import push, safe182
 
 KST = timezone(timedelta(hours=9))
 DEFAULT_INTERVAL, MIN_INTERVAL = 300, 60
@@ -46,15 +47,33 @@ def _now():
 
 
 def on_new_alert(alerts):
-    """신규 경보가 생기면 불린다. 나중에 FCM 푸시 발송을 여기에 붙인다. 지금은 건수만 남긴다.
-
-    FCM을 붙일 때 주의:
-    - 지금은 Tracker.update()가 이 함수를 부르기 전에 notified=True를 먼저 저장한다.
-      그대로 두면 발송이 실패한 경보는 다시 보내지 않고 묻힌다.
-      발송 성공 후 notified를 기록해야 하고, 실패 건 재전송 처리가 필요하다.
-    - alerts에는 실명 등 원본이 들어 있으므로 로그에는 건수만 남긴다.
-    """
+    """신규 경보(재전송 포함)마다 issued 푸시를 보내고 {식별번호: 발송 결과}를 돌려준다.
+    alerts에는 실명 등 원본이 들어 있으므로 로그에는 건수만 남긴다."""
     log.info("신규 경보 %d건", len(alerts))
+    return {r["msspsnIdntfccd"]: push.send("issued", r, SEARCHING) for r in alerts}
+
+
+def send_pending(tracker):
+    """보내야 할 푸시(push 표시)를 보낸다. 성공·건너뜀이면 표시를 지우고, 실패면 남겨 다음 회차에 다시 보낸다."""
+    with tracker.lock:
+        todo = {sid: (a["push"], tracker.raw.get(sid) or {"msspsnIdntfccd": sid})
+                for sid, a in tracker.alerts.items() if a.get("push")}
+    if not todo:
+        return
+    issued = [raw for event, raw in todo.values() if event == "issued"]
+    results = (on_new_alert(issued) if issued else None) or {}
+    for sid, (event, raw) in todo.items():
+        if event == "closed":
+            results[sid] = push.send("closed", raw, ENDED)
+    with tracker.lock:
+        for sid, (event, _) in todo.items():
+            a, res = tracker.alerts.get(sid), results.get(sid) or {}
+            if not a or a.get("push") != event or res.get("status") not in ("sent", "skipped"):
+                continue  # 그사이 바뀌었거나 실패 → 다음 회차에 다시
+            a["push"] = None
+            if event == "issued" and res["status"] == "sent":
+                a["notified"] = True
+        tracker._save()
 
 
 def _occr_date(value):
@@ -71,7 +90,7 @@ class Tracker:
     def __init__(self, state_path=None):
         self.lock = threading.Lock()
         self.state_path = state_path
-        self.alerts = {}  # 식별번호 → first_seen, last_seen, notified, status, miss_count, ended_at
+        self.alerts = {}  # 식별번호 → first_seen, last_seen, notified, status, miss_count, ended_at, push(보낼 푸시)
         self.raw = {}  # 식별번호 → 마지막으로 받은 원본 (메모리에만, 파일에 저장 안 함)
         self.baseline_done = False
         self.calls = {"date": None, "count": 0, "stopped": False, "warned": False}
@@ -152,8 +171,9 @@ class Tracker:
                 if a is None:
                     occr = _occr_date(r.get("occrde"))
                     is_new = not baseline and occr is not None and now.date() - occr <= NEW_WITHIN
-                    self.alerts[sid] = {"first_seen": now, "last_seen": now, "notified": is_new,
-                                        "status": SEARCHING, "miss_count": 0, "ended_at": None}
+                    self.alerts[sid] = {"first_seen": now, "last_seen": now, "notified": False,
+                                        "status": SEARCHING, "miss_count": 0, "ended_at": None,
+                                        "push": "issued" if is_new else None}
                     if is_new:
                         new.append(r)
                     else:  # 처음 켰을 때의 기준 목록, 또는 발생일이 오래됐거나 알 수 없는 새 번호
@@ -162,6 +182,8 @@ class Tracker:
                 a["last_seen"], a["miss_count"] = now, 0
                 if a["status"] == ENDED:
                     a["status"], a["ended_at"] = SEARCHING, None
+                    if a.get("push") == "closed":  # 종료 알림을 못 보낸 채 다시 나타남
+                        a["push"] = None
                     changes["restored"] += 1
             for sid, a in list(self.alerts.items()):
                 if sid in current:
@@ -169,7 +191,7 @@ class Tracker:
                 if a["status"] == SEARCHING:
                     a["miss_count"] += 1
                     if a["miss_count"] >= MISS_LIMIT:
-                        a["status"], a["ended_at"] = ENDED, now
+                        a["status"], a["ended_at"], a["push"] = ENDED, now, "closed"
                         changes["ended"] += 1
                     else:
                         changes["candidate"] += 1
@@ -260,8 +282,7 @@ def poll_once(tracker, api_id, api_key, failures, now=None, fetch=safe182.fetch_
     log.info("조회 완료: 전체 %d건 | 기준 %d, 신규 %d, 오래된 새 번호 %d, 종료후보 %d, 경보종료 %d, 복구 %d | 오늘 호출 %d회",
              len(rows), ch["baseline"], ch["new"], ch["old"], ch["candidate"], ch["ended"], ch["restored"],
              tracker.calls["count"])
-    if new:
-        on_new_alert(new)
+    send_pending(tracker)
     return INTERVAL, 0
 
 
