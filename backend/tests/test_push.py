@@ -128,7 +128,8 @@ def test_fire_sends_once_per_minute(client, fcm):
 
 def test_fire_dedup_expires(client, fcm, monkeypatch):
     client.post("/test/fire/9990001")
-    monkeypatch.setitem(push._last_fire, 9990001, push._last_fire[9990001] - push.FIRE_DEDUP_SEC)
+    key = (9990001, "issued")
+    monkeypatch.setitem(push._last_fire, key, push._last_fire[key] - push.FIRE_DEDUP_SEC)
     assert client.post("/test/fire/9990001").json()["push"]["status"] == "sent"
 
 
@@ -138,6 +139,16 @@ def test_found_sends_closed(client, fcm):
     title, body, data = fcm.sent[0]
     assert title == "실종경보 종료" and data["event"] == "closed" and data["status"] == "발견완료"
 
+
+def test_end_sends_closed_once_per_minute(client, fcm):
+    client.post("/test/fire/9990001")  # issued를 보낸 직후여도 closed는 따로 센다
+    res = client.post("/test/end/9990001").json()["push"]
+    assert res["status"] == "sent"
+    title, _, data = fcm.sent[-1]
+    assert title == "실종경보 종료" and data["event"] == "closed" and data["status"] == "경보종료"
+    again = client.post("/test/end/9990001").json()["push"]
+    assert again["status"] == "skipped" and "60초" in again["reason"]
+    assert len(fcm.sent) == 2
 
 def test_send_failure_reports_code_only(client, fcm, logs):
     fcm.fail = True

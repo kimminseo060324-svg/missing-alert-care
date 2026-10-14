@@ -184,6 +184,38 @@ def test_found_alert_still_visible_within_three_days(client, monkeypatch):
     assert client.get("/alerts/9990003").status_code == 200
 
 
+def test_end_marks_alert_ended_without_name_photo(client):
+    body = client.post("/test/end/9990001").json()
+    assert body["status"] == "경보종료" and body["found_at"] is None and body["ended_at"] is not None
+    assert body["nm"] is None and body["tknphotoFile"] is None and body["tknphotolength"] == 0
+    assert "push" in body
+    detail = client.get("/alerts/9990001").json()
+    assert detail["status"] == "경보종료" and detail["nm"] is None
+    assert [x["msspsnIdntfccd"] for x in client.get("/alerts", params={"status": "경보종료"}).json()["list"]] == [9990001]
+    assert client.post("/test/end/1234").status_code == 404
+
+
+def test_fire_after_end_restores_searching(client):
+    name = client.get("/alerts/9990001").json()["nm"]
+    client.post("/test/end/9990001")
+    body = client.post("/test/fire/9990001").json()
+    assert body["status"] == "수색중" and body["ended_at"] is None and body["nm"] == name
+
+
+def test_found_after_end_clears_ended_at(client):
+    client.post("/test/end/9990001")
+    body = client.post("/test/found/9990001").json()
+    assert body["status"] == "발견완료" and body["ended_at"] is None and body["found_at"] is not None
+
+def test_ended_alert_hidden_after_three_days(client, monkeypatch):
+    client.post("/test/end/9990001")
+    later = alerts._now()
+    monkeypatch.setattr(alerts, "_now", lambda: later + timedelta(days=2))
+    assert client.get("/alerts/9990001").status_code == 200
+    monkeypatch.setattr(alerts, "_now", lambda: later + timedelta(days=3, minutes=1))
+    assert 9990001 not in _ids(client.get("/alerts"))
+    assert client.get("/alerts/9990001").status_code == 404
+
 def test_state_is_reset_between_tests(client):
     assert alerts._state == {}
     assert all(x["status"] == "수색중" for x in client.get("/alerts").json()["list"])

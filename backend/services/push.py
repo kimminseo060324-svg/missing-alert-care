@@ -15,7 +15,7 @@ from pathlib import Path
 TOPIC = "missing_alerts_osan"
 CHANNEL_ID = "missing_alerts"
 DATA_VERSION = "1"
-FIRE_DEDUP_SEC = 60  # /test/fire로 같은 경보를 이 시간 안에 다시 보내지 않는다
+FIRE_DEDUP_SEC = 60  # 시연용 API로 같은 경보·같은 종류(issued/closed)를 이 시간 안에 다시 보내지 않는다
 UNKNOWN_REGION = "지역 미확인"
 GENDER = {"남자": "남성", "여자": "여성", "남": "남성", "여": "여성"}
 _SIDO = ("서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종", "경기", "강원",
@@ -32,7 +32,7 @@ if not log.handlers:
 _lock = threading.Lock()
 _app = None
 _disabled = None  # 끈 이유. None이면 아직 init() 전
-_last_fire = {}  # 식별번호 → 마지막 발송 시각 (time.monotonic)
+_last_fire = {}  # (식별번호, event) → 마지막 발송 시각 (time.monotonic)
 
 
 def init():
@@ -121,13 +121,13 @@ def _send_message(title, body, data):
 
 
 def send(event, raw, status, dedup=False):
-    """event: "issued" | "closed". dedup=True면 같은 경보를 FIRE_DEDUP_SEC 안에 다시 보내지 않는다."""
-    sid = raw.get("msspsnIdntfccd")
+    """event: "issued" | "closed". dedup=True면 같은 경보·같은 event를 FIRE_DEDUP_SEC 안에 다시 보내지 않는다."""
+    key = (raw.get("msspsnIdntfccd"), event)
     if not init():
         return {"status": "skipped", "reason": _disabled, "message_id": None}
     if dedup:
         with _lock:
-            last = _last_fire.get(sid)
+            last = _last_fire.get(key)
             if last is not None and time.monotonic() - last < FIRE_DEDUP_SEC:
                 return {"status": "skipped", "reason": f"{FIRE_DEDUP_SEC}초 안에 같은 경보를 이미 보냈습니다",
                         "message_id": None}
@@ -140,6 +140,6 @@ def send(event, raw, status, dedup=False):
         return {"status": "failed", "reason": reason, "message_id": None}
     if dedup:
         with _lock:
-            _last_fire[sid] = time.monotonic()
+            _last_fire[key] = time.monotonic()
     log.info("푸시 %s 발송 완료", event)
     return {"status": "sent", "reason": None, "message_id": message_id}

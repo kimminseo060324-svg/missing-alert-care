@@ -158,6 +158,7 @@ def test_ended_alert_hidden_from_list_and_detail_after_three_days(run, tracker, 
     assert 2 not in [x["msspsnIdntfccd"] for x in client.get("/alerts").json()["list"]]
     assert client.get("/alerts/2").status_code == 404
     assert client.post("/test/fire/1").status_code == 403  # 실제 모드에서 시연용 API 막힘
+    assert client.post("/test/end/1").status_code == 403
     assert client.post("/test/found/1").status_code == 403
     assert tracker.status_of(1) == sync.SEARCHING  # 막힌 요청은 상태를 바꾸지 않는다
 

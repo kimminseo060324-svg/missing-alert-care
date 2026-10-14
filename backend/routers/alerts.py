@@ -1,6 +1,6 @@
 """실종경보 API와 시연용 API.
 
-원본 필드는 그대로 두고 status, found_at, issued_at, target_label, photo_url, source, is_sample만 덧붙인다.
+원본 필드는 그대로 두고 status, found_at, ended_at, issued_at, target_label, photo_url, source, is_sample만 덧붙인다.
 source와 is_sample은 데이터를 읽어 온 모듈(source)이 정한다.
 시연용 상태(발령·발견)는 메모리에만 있어서 서버를 다시 켜면 처음 상태로 돌아간다.
 """
@@ -13,7 +13,7 @@ from services import push
 from services.data_source import source  # .env의 DATA_SOURCE로 가상(sample)·실제(safe182) 선택
 
 KST = timezone(timedelta(hours=9))
-FOUND_VISIBLE = timedelta(days=3)  # 발견 완료 후 목록·상세에 남아 있는 기간
+FOUND_VISIBLE = timedelta(days=3)  # 발견 완료·경보종료 후 목록·상세에 남아 있는 기간
 
 # 안전Dream 대상구분 코드 → 화면용 이름 (모르는 코드는 "기타")
 TARGET_LABELS = {
@@ -27,12 +27,12 @@ TARGET_LABELS = {
 
 class Status(str, Enum):
     searching = "수색중"
-    ended = "경보종료"  # 실제 모드에서 목록에서 3번 연속 빠진 경보
+    ended = "경보종료"  # 실제 모드에서 목록에서 3번 연속 빠진 경보, 시연용 /test/end
     found = "발견완료"  # 시연용 /test/found만
 
 
 router = APIRouter()
-_state = {}  # msspsnIdntfccd → {"status", "issued_at", "found_at"} (시연용 변경분)
+_state = {}  # msspsnIdntfccd → {"status", "issued_at", "found_at", "ended_at"} (시연용 변경분)
 
 
 def _now():
@@ -61,12 +61,16 @@ def _enrich(raw):
     sid = raw["msspsnIdntfccd"]
     st = _state.get(sid, {})
     issued = _issued_at(raw)
+    status = st.get("status", source.status_of(raw))
+    hidden = {"nm": None, "tknphotoFile": None, "tknphotolength": 0} if status == Status.ended.value else {}
     return {
         **raw,
+        **hidden,  # 경보종료는 이름·사진 제외 (실제 모드 sync.snapshot과 같은 규칙)
         "occrAdres": (raw.get("occrAdres") or "").strip(),
-        "status": st.get("status", source.status_of(raw)),
+        "status": status,
         "issued_at": issued.isoformat() if issued else None,
         "found_at": st["found_at"].isoformat() if st.get("found_at") else None,
+        "ended_at": st["ended_at"].isoformat() if st.get("ended_at") else None,
         "target_label": TARGET_LABELS.get(raw.get("writngTrgetDscd"), "기타"),
         "photo_url": None,
         "source": source.SOURCE,
@@ -75,7 +79,8 @@ def _enrich(raw):
 
 
 def _expired(st):
-    return st.get("found_at") is not None and _now() - st["found_at"] > FOUND_VISIBLE
+    done = st.get("found_at") or st.get("ended_at")
+    return done is not None and _now() - done > FOUND_VISIBLE
 
 
 def _find(sid):
@@ -89,7 +94,7 @@ def _find(sid):
 @router.get("/alerts", tags=["alerts"], summary="경보 목록")
 def list_alerts(
     days: int | None = Query(None, ge=1, le=36500, description="최근 며칠 안에 발령된 경보만 (생략하면 전체)"),
-    status: Status | None = Query(None, description="수색중 / 경보종료(실제 모드) / 발견완료(시연용)"),
+    status: Status | None = Query(None, description="수색중 / 경보종료(실제 모드, 시연용 /test/end) / 발견완료(시연용)"),
 ):
     raws, notice = source.load_alerts()
     # 가상 데이터는 발생일이 고정이라, 기본값으로 날짜를 거르면 시간이 지나 목록이 비어 버린다.
@@ -115,7 +120,7 @@ def list_alerts(
 def get_alert(sid: int):
     raw = _find(sid)
     if _expired(_state.get(sid, {})):
-        raise HTTPException(404, f"경보 {sid}는 발견 완료 후 3일이 지나 내려갔습니다")
+        raise HTTPException(404, f"경보 {sid}는 발견 완료·경보종료 후 3일이 지나 내려갔습니다")
     return _enrich(raw)
 
 
@@ -129,7 +134,7 @@ def _sample_only():
              dependencies=[Depends(_sample_only)])
 def test_fire(sid: int):
     _find(sid)
-    _state[sid] = {"status": Status.searching.value, "issued_at": _now(), "found_at": None}
+    _state[sid] = {"status": Status.searching.value, "issued_at": _now(), "found_at": None, "ended_at": None}
     item = _enrich(_find(sid))
     return {**item, "push": push.send("issued", item, item["status"], dedup=True)}
 
@@ -138,6 +143,15 @@ def test_fire(sid: int):
              dependencies=[Depends(_sample_only)])
 def test_found(sid: int):
     _find(sid)
-    _state.setdefault(sid, {}).update(status=Status.found.value, found_at=_now())
+    _state.setdefault(sid, {}).update(status=Status.found.value, found_at=_now(), ended_at=None)
     item = _enrich(_find(sid))
     return {**item, "push": push.send("closed", item, item["status"])}
+
+
+@router.post("/test/end/{sid}", tags=["test"], summary="시연용: 경보종료로 바꾸기",
+             dependencies=[Depends(_sample_only)])
+def test_end(sid: int):
+    _find(sid)
+    _state.setdefault(sid, {}).update(status=Status.ended.value, found_at=None, ended_at=_now())
+    item = _enrich(_find(sid))
+    return {**item, "push": push.send("closed", item, item["status"], dedup=True)}
