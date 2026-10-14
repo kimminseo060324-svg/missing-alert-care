@@ -1,8 +1,7 @@
 """가상 실종경보 데이터 읽기.
 
-나중에 실제 안전Dream API로 바꿀 때는 SOURCE, IS_SAMPLE과 load_alerts()(원본 목록, 안내 문구)를
-같은 모양으로 갖춘 모듈을 만들고 routers/alerts.py의 import만 바꾸면 된다.
-(실제 모듈은 SOURCE = "자료 출처: 경찰청", IS_SAMPLE = False)
+데이터 모듈은 SOURCE, IS_SAMPLE, load_alerts()(원본 목록, 안내 문구), status_of(원본)을 같은 모양으로 갖춘다.
+실제 안전Dream 모듈은 services/safe182.py이고, services/data_source.py가 .env의 DATA_SOURCE로 고른다.
 """
 import json
 from pathlib import Path
@@ -21,3 +20,8 @@ def load_alerts():
     except (OSError, ValueError) as e:
         return [], f"가상 데이터 파일을 읽지 못했습니다: {e}"
     return data.get("list") or [], None
+
+
+def status_of(raw):
+    """가상 데이터는 모두 수색중으로 시작한다 (시연용 /test/found로만 바뀜)."""
+    return "수색중"
