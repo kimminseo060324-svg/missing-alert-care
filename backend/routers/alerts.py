@@ -9,6 +9,7 @@ from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from services import push
 from services.data_source import source  # .env의 DATA_SOURCE로 가상(sample)·실제(safe182) 선택
 
 KST = timezone(timedelta(hours=9))
@@ -129,7 +130,8 @@ def _sample_only():
 def test_fire(sid: int):
     _find(sid)
     _state[sid] = {"status": Status.searching.value, "issued_at": _now(), "found_at": None}
-    return _enrich(_find(sid))
+    item = _enrich(_find(sid))
+    return {**item, "push": push.send("issued", item, item["status"], dedup=True)}
 
 
 @router.post("/test/found/{sid}", tags=["test"], summary="시연용: 발견 완료로 바꾸기",
@@ -137,4 +139,5 @@ def test_fire(sid: int):
 def test_found(sid: int):
     _find(sid)
     _state.setdefault(sid, {}).update(status=Status.found.value, found_at=_now())
-    return _enrich(_find(sid))
+    item = _enrich(_find(sid))
+    return {**item, "push": push.send("closed", item, item["status"])}

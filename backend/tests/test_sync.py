@@ -51,7 +51,10 @@ def logs():
 @pytest.fixture
 def pushed(monkeypatch):
     calls = []
-    monkeypatch.setattr(sync, "on_new_alert", lambda new: calls.append([r["msspsnIdntfccd"] for r in new]))
+    def fake(new):
+        calls.append([r["msspsnIdntfccd"] for r in new])
+        return {r["msspsnIdntfccd"]: {"status": "sent"} for r in new}
+    monkeypatch.setattr(sync, "on_new_alert", fake)
     return calls
 
 
