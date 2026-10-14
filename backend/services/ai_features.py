@@ -12,6 +12,9 @@
 - 캐시는 메모리 기본, DATA_SOURCE=sample일 때만 results/ai_cache.json에도 저장한다 (safe182는 파일 저장 금지).
   파일에는 항목마다 설정 해시만 함께 저장한다 (모델명·프롬프트 원문은 저장하지 않음).
   읽을 때 설정 해시가 지금과 다르거나 없거나 모양이 틀린 항목은 버린다 → 새로 추출.
+- 경보마다 마지막 요청의 캐시 키를 기억한다(_current). 작업이 끝났을 때 그 경보의 마지막 요청 키와 같을 때만
+  결과를 반영한다. 먼저 시작한 작업이 늦게 끝나 최신 결과(예: 문자 내용이 바뀐 뒤의 요청)를 덮어쓰지 않게 하려는 것.
+  버린 결과도 캐시에는 키 기준으로 넣는다.
 - AI_EXTRACT_ENABLED(기본 sample=1, safe182=0)가 꺼져 있거나 GEMINI_API_KEY가 없거나 호출이 실패하면 unavailable.
   예외는 밖으로 내보내지 않고, 로그에는 건수·오류 종류만 남긴다 (원문·키·응답 없음).
 """
@@ -46,6 +49,7 @@ _lock = threading.Lock()
 _results = {}  # 식별번호 → {"status", "clothing", "summary", "extracted_at"}
 _cache = {}  # 캐시 키 → (설정 해시, {"clothing", "summary", "extracted_at"})
 _waiting = {}  # 추출 대기 중인 키 → (문장, 설정 해시, [식별번호])
+_current = {}  # 식별번호 → 마지막 요청의 캐시 키 (보낼 글이 없으면 없음)
 _loop = None
 _queue = None
 _task = None
@@ -143,18 +147,21 @@ def submit(raws):
         text = source_text(raw) if enabled() and os.getenv("GEMINI_API_KEY") else None
         if not text or _loop is None:
             with _lock:
+                _current.pop(sid, None)  # 진행 중인 예전 요청 결과는 반영하지 않음
                 if _results.get(sid, {}).get("status") != "done":
                     _results[sid] = _empty("unavailable")
             continue
         config = config_hash()
         key = _key(text, config)
         with _lock:
+            _current[sid] = key
             if key in _cache:
                 _results[sid] = {"status": "done", **_cache[key][1]}
                 continue
             _results[sid] = _empty("pending")
             if key in _waiting:
-                _waiting[key][2].append(sid)
+                if sid not in _waiting[key][2]:
+                    _waiting[key][2].append(sid)
                 continue
             _waiting[key] = (text, config, [sid])
         try:
@@ -162,6 +169,7 @@ def submit(raws):
         except (RuntimeError, AttributeError):  # 서버가 꺼지는 중 (루프가 닫힘)
             with _lock:
                 _waiting.pop(key, None)
+                _current.pop(sid, None)
                 _results[sid] = _empty("unavailable")
 
 
@@ -203,14 +211,18 @@ async def _worker():
         result = await _in_daemon_thread(_extract_safe, text)
         with _lock:
             _, _, sids = _waiting.pop(key, (None, None, []))
+            stale = [sid for sid in sids if _current.get(sid) != key]  # 그사이 새 요청이 들어온 경보
             for sid in sids:
-                _results[sid] = {"status": "done", **result} if result else _empty("unavailable")
+                if sid not in stale:
+                    _results[sid] = {"status": "done", **result} if result else _empty("unavailable")
             if result:
                 _cache[key] = (config, result)
                 snapshot = {k: {"config": c, **r} for k, (c, r) in _cache.items()}
         if result and _save_file():
             _write_cache(snapshot)
-        log.info("AI 추출 %s (경보 %d건)", "완료" if result else "실패", len(sids))
+        if stale:
+            log.info("AI 추출 결과 %d건은 그사이 새 요청이 있어 반영하지 않았습니다", len(stale))
+        log.info("AI 추출 %s (경보 %d건)", "완료" if result else "실패", len(sids) - len(stale))
 
 
 def _write_cache(cache):
