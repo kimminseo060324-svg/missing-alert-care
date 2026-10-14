@@ -2,3 +2,7 @@ fastapi==0.143.0
 uvicorn[standard]==0.54.0
 requests==2.34.2
 python-dotenv==1.2.4
+
+# tests (pytest backend)
+pytest==9.1.1
+httpx2==2.13.1
