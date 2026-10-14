@@ -130,3 +130,15 @@ backend/firebase-admin-key.json
 __pycache__/
 .venv/
 build/
+
+# Firebase client configuration
+**/google-services.json
+**/GoogleService-Info.plist
+
+# Android signing
+*.keystore
+
+# Local development
+.vscode/
+venv/
+*.apk
