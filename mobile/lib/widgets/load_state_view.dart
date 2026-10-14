@@ -63,7 +63,8 @@ class LoadErrorView extends StatelessWidget {
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => const ServerSettingsScreen()),
     );
-    if (changed == true) onRetry();
+    // 설정 화면에 있는 동안 이 화면이 닫혔으면 다시 시도하지 않아요.
+    if (changed == true && context.mounted) onRetry();
   }
 }
 

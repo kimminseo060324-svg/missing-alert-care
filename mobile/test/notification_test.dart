@@ -202,6 +202,38 @@ void main() {
       expect(retried, 0);
     });
 
+    testWidgets('설정 화면에 있는 동안 원래 화면이 닫혔으면 저장해도 다시 시도하지 않아요', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      ApiSettings.current = const ApiSettings(baseUrl: 'http://10.0.2.2:8000');
+      var retried = 0;
+      final showError = ValueNotifier(true);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: Scaffold(
+            body: ValueListenableBuilder<bool>(
+              valueListenable: showError,
+              builder: (_, show, _) => show
+                  ? LoadErrorView(onRetry: () => retried++, server: true)
+                  : const Text('다른 화면'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text(LoadErrorView.changeServerLabel));
+      await tester.pumpAndSettle();
+
+      // 설정 화면 아래에서 실패 화면이 사라져요.
+      showError.value = false;
+      await tester.pump();
+
+      await tester.enterText(find.byType(TextField), '192.168.0.5:8000');
+      await tester.tap(find.text('저장'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(retried, 0);
+    });
+
     testWidgets('앱 안 데이터를 못 읽을 때는 서버 버튼이 없어요', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
