@@ -7,9 +7,14 @@
 - send()는 {"status": "sent"|"skipped"|"failed", "reason", "message_id"}를 돌려준다.
 - 발송 타임아웃은 .env FIREBASE_SEND_TIMEOUT_SEC (기본 10초). firebase-admin 앱 옵션 httpTimeout에
   초 단위로 넘긴다 (SDK 문서: "httpTimeout ... default timeout of 120 seconds", 인증 토큰 갱신에도 같은 값).
-  SDK가 읽기 시간 초과를 한 번 다시 시도하므로 최악은 약 2배 걸리고, 그 뒤에는 UnavailableError(UNAVAILABLE)로
-  온다 (재시도 없이 끝나면 DeadlineExceededError). 둘 다 원인을 따라가 "응답 시간 초과"로 표시하고 failed로 돌려준다
-  (sync는 재전송 대상으로 남긴다).
+  타임아웃은 HTTP 요청 한 번마다 걸리고, SDK가 안에서 다시 보내는 요청에도 각각 걸린다.
+- SDK 내부 재시도 (firebase-admin 7.7.0 _http_client.DEFAULT_RETRY_CONFIG, urllib3 2.8.0으로 확인):
+  500·503 응답은 최대 4번 다시 보내고 사이 대기는 0·1·2·4초. 503에 Retry-After 헤더가 있으면 그 값만큼 기다린다
+  (urllib3 상한 21600초). 읽기 시간 초과·연결 시간 초과는 각각 1번 다시 보낸다.
+  그래서 send() 한 번은 타임아웃보다 길어질 수 있다 (예: 503만 계속 오면 요청 5번 + 대기 약 7초).
+- 재시도 뒤에도 시간 초과면 UnavailableError(UNAVAILABLE)로, 재시도 없이 끝나면 DeadlineExceededError로 온다.
+  둘 다 원인을 따라가 "응답 시간 초과"로 표시하고 failed로 돌려준다 (sync는 재전송 대상으로 남긴다).
+- 같은 경보에서 issued·closed 알림은 tag "alert_{식별번호}"를 같이 써서 기기에서 한 알림으로 바뀐다.
 """
 import logging
 import os
@@ -21,7 +26,7 @@ TOPIC = "missing_alerts_osan"
 CHANNEL_ID = "missing_alerts"
 DATA_VERSION = "1"
 DEFAULT_SEND_TIMEOUT = 10.0  # 초 (FIREBASE_SEND_TIMEOUT_SEC)
-FIRE_DEDUP_SEC = 60  # 시연용 API로 같은 경보·같은 종류(issued/closed)를 이 시간 안에 다시 보내지 않는다
+FIRE_DEDUP_SEC = 60  # 시연용 API로 같은 경보·같은 종류(issued/closed)·같은 상태를 이 시간 안에 다시 보내지 않는다
 UNKNOWN_REGION = "지역 미확인"
 GENDER = {"남자": "남성", "여자": "여성", "남": "남성", "여": "여성"}
 _SIDO = ("서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종", "경기", "강원",
@@ -38,7 +43,7 @@ if not log.handlers:
 _lock = threading.Lock()
 _app = None
 _disabled = None  # 끈 이유. None이면 아직 init() 전
-_last_fire = {}  # (식별번호, event) → 마지막 발송 시각 (time.monotonic)
+_last_fire = {}  # (식별번호, event, status) → 마지막 발송 성공 시각 (time.monotonic). 실패는 기록하지 않는다
 
 
 def send_timeout():
@@ -108,7 +113,9 @@ def _age(raw):
 def build(event, raw, status):
     """(제목, 본문, data). data 값은 모두 문자열."""
     region = region_of(raw.get("occrAdres"))
-    if event == "closed":
+    if event == "closed" and status == "발견완료":
+        title, body = "실종자 발견", f"{region} 실종자를 찾았어요"
+    elif event == "closed":
         title, body = "실종경보 종료", f"{region} 실종경보가 종료됐어요"
     else:
         age, gender = _age(raw), GENDER.get(str(raw.get("sexdstnDscd") or "").strip())
@@ -129,8 +136,8 @@ def _send_message(title, body, data):
         topic=TOPIC,
         notification=messaging.Notification(title=title, body=body),
         data=data,
-        android=messaging.AndroidConfig(priority="high",
-                                        notification=messaging.AndroidNotification(channel_id=CHANNEL_ID)),
+        android=messaging.AndroidConfig(priority="high", notification=messaging.AndroidNotification(
+            channel_id=CHANNEL_ID, tag=f"alert_{data['alert_id']}")),  # 같은 경보의 issued·closed는 한 알림으로 바뀜
     )
     return messaging.send(msg, app=_app)
 
@@ -155,8 +162,8 @@ def _is_timeout(e):
 
 
 def send(event, raw, status, dedup=False):
-    """event: "issued" | "closed". dedup=True면 같은 경보·같은 event를 FIRE_DEDUP_SEC 안에 다시 보내지 않는다."""
-    key = (raw.get("msspsnIdntfccd"), event)
+    """event: "issued" | "closed". dedup=True면 같은 경보·같은 event·같은 status를 FIRE_DEDUP_SEC 안에 다시 보내지 않는다."""
+    key = (raw.get("msspsnIdntfccd"), event, status)
     if not init():
         return {"status": "skipped", "reason": _disabled, "message_id": None}
     if dedup:

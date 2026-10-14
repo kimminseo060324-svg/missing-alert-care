@@ -82,6 +82,30 @@ def test_issued_fallback_and_closed_text():
     assert data["event"] == "closed" and data["status"] == "경보종료"
 
 
+DATA_KEYS = {"type", "event", "alert_id", "status", "region", "version"}
+
+
+def test_closed_text_by_status():
+    raw = {"msspsnIdntfccd": 9990001, "nm": "홍길동", "occrAdres": "경기 오산시 양산동"}
+    ended = push.build("closed", raw, "경보종료")
+    found = push.build("closed", raw, "발견완료")
+    assert ended[:2] == ("실종경보 종료", "오산시 실종경보가 종료됐어요")
+    assert found[:2] == ("실종자 발견", "오산시 실종자를 찾았어요")
+    assert set(ended[2]) == set(found[2]) == DATA_KEYS  # data 모양은 그대로
+    assert found[2]["event"] == "closed" and found[2]["status"] == "발견완료"
+
+
+def test_android_tag_same_for_issued_and_closed(monkeypatch):
+    from firebase_admin import messaging
+    got = []
+    monkeypatch.setattr(messaging, "send", lambda msg, app=None: got.append(msg) or "id")
+    raw = {"msspsnIdntfccd": 9990001, "occrAdres": "경기 오산시 양산동"}
+    for event, status in [("issued", "수색중"), ("closed", "경보종료"), ("closed", "발견완료")]:
+        push._send_message(*push.build(event, raw, status))
+    assert [m.android.notification.tag for m in got] == ["alert_9990001"] * 3
+    assert all(m.android.notification.channel_id == "missing_alerts" and m.android.priority == "high" for m in got)
+
+
 def test_lat_lng_added_only_when_known(monkeypatch):
     monkeypatch.setattr(push, "coordinates", lambda raw: (37.15, 127.07))
     _, _, data = push.build("issued", {"msspsnIdntfccd": 1}, "수색중")
@@ -208,7 +232,7 @@ def test_fire_sends_once_per_minute(client, fcm):
 
 def test_fire_dedup_expires(client, fcm, monkeypatch):
     client.post("/test/fire/9990001")
-    key = (9990001, "issued")
+    key = (9990001, "issued", "수색중")
     monkeypatch.setitem(push._last_fire, key, push._last_fire[key] - push.FIRE_DEDUP_SEC)
     assert client.post("/test/fire/9990001").json()["push"]["status"] == "sent"
 
@@ -217,7 +241,7 @@ def test_found_sends_closed(client, fcm):
     res = client.post("/test/found/9990003").json()["push"]
     assert res["status"] == "sent"
     title, body, data = fcm.sent[0]
-    assert title == "실종경보 종료" and data["event"] == "closed" and data["status"] == "발견완료"
+    assert title == "실종자 발견" and data["event"] == "closed" and data["status"] == "발견완료"
     again = client.post("/test/found/9990003").json()["push"]
     assert again["status"] == "skipped" and "60초" in again["reason"]
     assert len(fcm.sent) == 1
@@ -232,6 +256,29 @@ def test_end_sends_closed_once_per_minute(client, fcm):
     again = client.post("/test/end/9990001").json()["push"]
     assert again["status"] == "skipped" and "60초" in again["reason"]
     assert len(fcm.sent) == 2
+
+def test_dedup_same_status_repeat_is_skipped(client, fcm):
+    assert client.post("/test/end/9990001").json()["push"]["status"] == "sent"
+    again = client.post("/test/end/9990001").json()["push"]
+    assert again["status"] == "skipped" and "60초" in again["reason"]
+    assert client.post("/test/found/9990002").json()["push"]["status"] == "sent"
+    assert client.post("/test/found/9990002").json()["push"]["status"] == "skipped"
+    assert len(fcm.sent) == 2
+
+
+def test_end_then_found_sends_both(client, fcm):
+    assert client.post("/test/end/9990001").json()["push"]["status"] == "sent"
+    assert client.post("/test/found/9990001").json()["push"]["status"] == "sent"  # 경보종료→발견완료는 상태가 달라 발송
+    assert [(t, d["status"]) for t, _, d in fcm.sent] == [("실종경보 종료", "경보종료"), ("실종자 발견", "발견완료")]
+
+
+def test_failed_send_is_not_recorded_and_retries(client, fcm):
+    fcm.fail = True
+    assert client.post("/test/end/9990001").json()["push"]["status"] == "failed"
+    assert push._last_fire == {}  # 실패는 중복 방지 키에 기록 안 됨
+    fcm.fail = False
+    assert client.post("/test/end/9990001").json()["push"]["status"] == "sent"  # 바로 다시 불러도 재시도
+    assert list(push._last_fire) == [(9990001, "closed", "경보종료")]
 
 def test_send_failure_reports_code_only(client, fcm, logs):
     fcm.fail = True
