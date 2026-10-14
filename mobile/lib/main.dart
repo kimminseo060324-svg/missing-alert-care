@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'data/api_settings.dart';
 import 'push/push_service.dart';
 import 'screens/demo_menu_screen.dart';
 import 'screens/splash_screen.dart';
@@ -7,6 +8,7 @@ import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await ApiSettings.load(); // 저장해 둔 서버 주소
   runApp(GieokhaejwoApp(navigatorKey: PushService.navigatorKey));
   await PushService.start();
 }

@@ -25,11 +25,12 @@ class AlertListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final found = alert.isFound;
+    final dim = !alert.isSearching; // 발견 완료·경보 종료는 흐리게
     final radius = BorderRadius.circular(14);
     return Opacity(
-      opacity: found ? 0.8 : 1,
+      opacity: dim ? 0.8 : 1,
       child: Material(
-        color: found ? const Color(0xFFF8FBFC) : AppColors.white,
+        color: dim ? const Color(0xFFF8FBFC) : AppColors.white,
         shape: RoundedRectangleBorder(
           borderRadius: radius,
           side: selected
@@ -50,7 +51,11 @@ class AlertListItem extends StatelessWidget {
                     style: appText(
                       20,
                       weight: FontWeight.w900,
-                      color: found ? AppColors.green : AppColors.navy,
+                      color: found
+                          ? AppColors.green
+                          : dim
+                          ? AppColors.gray400
+                          : AppColors.navy,
                     ),
                   ),
                 ),
@@ -70,9 +75,7 @@ class AlertListItem extends StatelessWidget {
                       FittedBox(
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.centerLeft,
-                        child: found
-                            ? StatusChip.found(alert.foundTime)
-                            : const StatusChip.searching(),
+                        child: StatusChip.of(alert),
                       ),
                       const SizedBox(height: 6),
                       Text(

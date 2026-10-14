@@ -5,12 +5,16 @@ import '../theme/app_text.dart';
 import 'app_button.dart';
 
 /// 데이터를 못 읽었을 때 보여주는 안내 + "다시 시도" 버튼.
+/// [server]면 서버 연결 실패 안내를 보여 줘요.
 class LoadErrorView extends StatelessWidget {
-  const LoadErrorView({super.key, required this.onRetry});
+  const LoadErrorView({super.key, required this.onRetry, this.server = false});
 
   static const message = '경보 데이터를 불러오지 못했습니다.';
+  static const serverMessage = '서버에 연결하지 못했어요.';
+  static const serverHint = '서버가 켜져 있는지, 시연 메뉴의 서버 주소가 맞는지 확인해 주세요.';
 
   final VoidCallback onRetry;
+  final bool server;
 
   @override
   Widget build(BuildContext context) {
@@ -23,13 +27,13 @@ class LoadErrorView extends StatelessWidget {
             const Icon(Icons.cloud_off, size: 40, color: AppColors.gray400),
             const SizedBox(height: 12),
             Text(
-              message,
+              server ? serverMessage : message,
               textAlign: TextAlign.center,
               style: appText(16, weight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             Text(
-              '잠시 후 다시 시도해 주세요.',
+              server ? serverHint : '잠시 후 다시 시도해 주세요.',
               textAlign: TextAlign.center,
               style: appText(13, color: AppColors.gray600),
             ),

@@ -1,3 +1,6 @@
+/// 경보 상태. 서버 응답의 status 글자(수색중 / 경보종료 / 발견완료)와 같아요.
+enum AlertStatus { searching, ended, found }
+
 /// 실종경보 한 건.
 ///
 /// 필드 이름은 경찰청 안전Dream API(amberList.do) 응답과 같아요.
@@ -20,9 +23,11 @@ class MissingAlert {
     required this.clothingTop,
     required this.clothingBottom,
     required this.foundTime,
+    this.status = AlertStatus.searching,
   });
 
   factory MissingAlert.fromJson(Map<String, dynamic> json) {
+    final demoFoundTime = _str(json['demoFoundTime']);
     return MissingAlert(
       id: _int(json['msspsnIdntfccd']),
       occrde: _str(json['occrde']),
@@ -38,8 +43,28 @@ class MissingAlert {
       alldressingDscd: _str(json['alldressingDscd']),
       clothingTop: _str(json['clothingTop']),
       clothingBottom: _str(json['clothingBottom']),
-      foundTime: _str(json['demoFoundTime']),
+      foundTime: demoFoundTime.isNotEmpty
+          ? demoFoundTime
+          : _clock(_str(json['found_at'])),
+      status: _status(_str(json['status']), demoFoundTime),
     );
+  }
+
+  /// 서버가 준 status 글자를 읽어요. 없으면(앱 안 가짜 데이터) demoFoundTime으로 정해요.
+  static AlertStatus _status(String status, String demoFoundTime) =>
+      switch (status) {
+        '수색중' => AlertStatus.searching,
+        '경보종료' => AlertStatus.ended,
+        '발견완료' => AlertStatus.found,
+        _ =>
+          demoFoundTime.isNotEmpty ? AlertStatus.found : AlertStatus.searching,
+      };
+
+  /// "2026-10-14T21:30:05+09:00" → "21:30" (서버가 보낸 한국 시각 그대로)
+  static String _clock(String iso) {
+    final t = iso.indexOf('T');
+    if (t < 0 || iso.length < t + 6) return '';
+    return iso.substring(t + 1, t + 6);
   }
 
   final int id; // msspsnIdntfccd
@@ -56,11 +81,14 @@ class MissingAlert {
   final String alldressingDscd; // 경찰청 착의 (짧고 비어 있을 때가 많음)
   final String clothingTop; // 상의 (행안부 재난문자)
   final String clothingBottom; // 하의·신발 (행안부 재난문자)
-  final String foundTime; // 시연용: 값이 있으면 발견 완료
+  final String foundTime; // 발견 시각 "14:35" (모르면 빈 글자)
+  final AlertStatus status;
 
   static const noInfo = '정보 없음';
 
-  bool get isFound => foundTime.isNotEmpty;
+  bool get isSearching => status == AlertStatus.searching;
+  bool get isEnded => status == AlertStatus.ended;
+  bool get isFound => status == AlertStatus.found;
 
   /// 김가상 → 김○○
   String get maskedName => nm.isEmpty ? '○○○' : '${nm.substring(0, 1)}○○';

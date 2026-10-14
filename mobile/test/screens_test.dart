@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gieokhaejwo/data/alert_repository.dart';
+import 'package:gieokhaejwo/data/api_settings.dart';
 import 'package:gieokhaejwo/main.dart';
 import 'package:gieokhaejwo/models/missing_alert.dart';
 import 'package:gieokhaejwo/screens/alert_detail_screen.dart';
@@ -21,8 +22,13 @@ void main() {
 
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
+    // 테스트에서는 서버 대신 앱 안 가짜 데이터를 읽어요.
+    ApiSettings.current = const ApiSettings(
+      baseUrl: ApiSettings.defaultBaseUrl,
+      useBuiltIn: true,
+    );
     alerts = await AlertRepository.instance.loadAll();
-    searching = alerts.firstWhere((a) => !a.isFound);
+    searching = alerts.firstWhere((a) => a.isSearching);
     found = alerts.firstWhere((a) => a.isFound);
   });
 
@@ -33,8 +39,9 @@ void main() {
     view.devicePixelRatio = 1;
   });
 
-  test('가짜 데이터 6건을 읽고, 빈 옷차림은 "정보 없음"', () {
-    expect(alerts.length, 6);
+  test('가짜 데이터 7건을 읽고, 빈 옷차림은 "정보 없음"', () {
+    expect(alerts.length, 7);
+    expect(alerts.where((a) => a.isEnded).length, 1);
     final empty = alerts.firstWhere((a) => a.clothingTop.isEmpty);
     expect(empty.topText, '정보 없음');
     expect(searching.maskedName, '김○○');

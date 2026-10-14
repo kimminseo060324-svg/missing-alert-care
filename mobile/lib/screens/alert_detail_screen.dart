@@ -26,7 +26,7 @@ class AlertDetailScreen extends StatelessWidget {
           ScreenHeader(
             title: '실종경보 상세',
             child: HeroInfo(
-              chip: const StatusChip.searching(tone: ChipTone.onColor),
+              chip: StatusChip.of(alert, onColor: true),
               title: '${alert.maskedName} 씨',
               sub: '${alert.sexLong} · ${alert.age}세',
               meta: '${alert.region}  ·  ${alert.occrDateText} 발령',
@@ -38,6 +38,10 @@ class AlertDetailScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (alert.isEnded) ...[
+                    const _EndedNotice(),
+                    const SizedBox(height: 12),
+                  ],
                   // 이것만 기억하세요: 핵심 3가지를 색 칸으로
                   SectionCard(
                     title: '이것만 기억하세요',
@@ -193,4 +197,33 @@ class AlertDetailScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 경보 종료 안내. 경찰청 목록에서 내려간 경보예요 (발견 여부는 알 수 없어요).
+class _EndedNotice extends StatelessWidget {
+  const _EndedNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.generalGray,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: appText(15, weight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text(
+            '경찰청 실종경보 목록에서 내려간 경보예요. 그래도 이 분을 본 적이 있으면 182로 알려 주세요.',
+            style: appText(13, color: AppColors.gray600, height: 1.5),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static const title = '경보가 종료됐어요';
 }
