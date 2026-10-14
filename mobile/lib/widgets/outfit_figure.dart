@@ -56,7 +56,7 @@ class OutfitFigure extends StatelessWidget {
       painter: _OutfitPainter(
         top: colorFromText(alert.clothingTop) ?? AppColors.gray400,
         bottom: colorFromText(alert.clothingBottom) ?? AppColors.gray400,
-        shoe: _shoeColor(alert.clothingBottom),
+        shoe: _shoeColor('${alert.clothingBottom} ${alert.shoes}'),
         unknown: alert.clothingTop.isEmpty && alert.clothingBottom.isEmpty,
       ),
     );
