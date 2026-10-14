@@ -1,11 +1,16 @@
 /// 경보 상태. 서버 응답의 status 글자(수색중 / 경보종료 / 발견완료)와 같아요.
 enum AlertStatus { searching, ended, found }
 
+/// 서버 응답 ai.status. none은 ai가 없는 데이터(앱 안 가짜 데이터)예요.
+enum AiStatus { none, pending, done, unavailable }
+
 /// 실종경보 한 건.
 ///
 /// 필드 이름은 경찰청 안전Dream API(amberList.do) 응답과 같아요.
-/// clothingTop / clothingBottom 은 경찰청 API에 없고, 나중에 서버가
-/// 행안부 재난문자 본문에서 AI로 뽑아서 붙여 줄 값이에요.
+/// clothingTop / clothingBottom / shoes / accessories 는 경찰청 API에 없어요.
+/// 서버 응답에서는 행안부 재난문자 본문에서 AI로 뽑은 `ai` 필드에서 읽고,
+/// 앱 안 가짜 데이터에서는 같은 이름의 필드에서 읽어요.
+/// (앱 안 가짜 데이터의 clothingBottom에는 신발까지 들어 있어요.)
 class MissingAlert {
   const MissingAlert({
     required this.id,
@@ -24,10 +29,23 @@ class MissingAlert {
     required this.clothingBottom,
     required this.foundTime,
     this.status = AlertStatus.searching,
+    this.shoes = '',
+    this.accessories = '',
+    this.aiStatus = AiStatus.none,
+    this.aiSummary = const [],
+    this.hasClothingDetail = true,
   });
 
   factory MissingAlert.fromJson(Map<String, dynamic> json) {
     final demoFoundTime = _str(json['demoFoundTime']);
+    final ai = json['ai'] is Map ? json['ai'] as Map : null;
+    final aiStatus = ai == null ? AiStatus.none : _aiStatus(_str(ai['status']));
+    final clothing = aiStatus == AiStatus.done && ai!['clothing'] is Map
+        ? ai['clothing'] as Map
+        : const {};
+    String fromAi(List<String> slots) =>
+        slots.expand((s) => _list(clothing[s])).join(', ');
+    String pick(String own, String ai) => own.isNotEmpty ? own : ai;
     return MissingAlert(
       id: _int(json['msspsnIdntfccd']),
       occrde: _str(json['occrde']),
@@ -41,8 +59,13 @@ class MissingAlert {
       bdwgh: _int(json['bdwgh']),
       frmDscd: _str(json['frmDscd']),
       alldressingDscd: _str(json['alldressingDscd']),
-      clothingTop: _str(json['clothingTop']),
-      clothingBottom: _str(json['clothingBottom']),
+      clothingTop: pick(_str(json['clothingTop']), fromAi(['upper'])),
+      clothingBottom: pick(_str(json['clothingBottom']), fromAi(['lower'])),
+      shoes: pick(_str(json['shoes']), fromAi(['shoes'])),
+      accessories: pick(_str(json['accessories']), fromAi(['accessories'])),
+      aiStatus: aiStatus,
+      aiSummary: aiStatus == AiStatus.done ? _list(ai!['summary']) : const [],
+      hasClothingDetail: ai == null || ai['clothing'] is Map,
       foundTime: demoFoundTime.isNotEmpty
           ? demoFoundTime
           : _clock(_str(json['found_at'])),
@@ -59,6 +82,12 @@ class MissingAlert {
         _ =>
           demoFoundTime.isNotEmpty ? AlertStatus.found : AlertStatus.searching,
       };
+
+  static AiStatus _aiStatus(String status) => switch (status) {
+    'done' => AiStatus.done,
+    'pending' => AiStatus.pending,
+    _ => AiStatus.unavailable,
+  };
 
   /// "2026-10-14T21:30:05+09:00" → "21:30" (서버가 보낸 한국 시각 그대로)
   static String _clock(String iso) {
@@ -80,11 +109,50 @@ class MissingAlert {
   final String frmDscd; // 체형
   final String alldressingDscd; // 경찰청 착의 (짧고 비어 있을 때가 많음)
   final String clothingTop; // 상의 (행안부 재난문자)
-  final String clothingBottom; // 하의·신발 (행안부 재난문자)
+  final String clothingBottom; // 하의 (앱 안 가짜 데이터는 하의·신발)
+  final String shoes; // 신발 (서버 ai.clothing.shoes)
+  final String accessories; // 소지품 (지팡이, 배낭 …)
+  final AiStatus aiStatus;
+  final List<String> aiSummary; // 서버가 정리한 옷차림 문장 (최대 3개)
+
+  /// 옷차림 칸(ai.clothing)까지 받은 데이터예요.
+  /// 목록(/alerts)에는 ai.clothing이 없어서 false, 상세(/alerts/{id})는 true.
+  final bool hasClothingDetail;
   final String foundTime; // 발견 시각 "14:35" (모르면 빈 글자)
   final AlertStatus status;
 
   static const noInfo = '정보 없음';
+  static const aiAnalyzing = '분석 중';
+  static const noOutfit = '옷차림 정보 없음';
+  static const aiUnavailable = 'AI 정보를 제공할 수 없음';
+
+  /// 서버가 옷차림을 아직 뽑는 중이에요. 새로고침하면 채워져요.
+  bool get aiPending => aiStatus == AiStatus.pending;
+
+  /// 서버 응답에 ai가 있어요 (상의·하의·신발·소지품을 따로 보여 줘요).
+  bool get hasAi => aiStatus != AiStatus.none;
+
+  /// 옷차림 글자가 하나라도 있어요.
+  bool get hasOutfit => [
+    clothingTop,
+    clothingBottom,
+    shoes,
+    accessories,
+  ].any((s) => s.isNotEmpty);
+
+  /// "이것만 기억하세요"처럼 좁은 칸에 쓰는 짧은 말
+  String get outfitShortNote => switch (aiStatus) {
+    AiStatus.pending => aiAnalyzing,
+    AiStatus.unavailable => '제공 불가',
+    _ => noInfo,
+  };
+
+  /// 옷차림이 하나도 없을 때 대신 보여 줄 말
+  String get outfitNote => switch (aiStatus) {
+    AiStatus.pending => aiAnalyzing,
+    AiStatus.unavailable => aiUnavailable,
+    _ => noOutfit,
+  };
 
   bool get isSearching => status == AlertStatus.searching;
   bool get isEnded => status == AlertStatus.ended;
@@ -106,16 +174,32 @@ class MissingAlert {
     return parts.isEmpty ? '지역 정보 없음' : parts.first;
   }
 
-  String get topText => clothingTop.isEmpty ? noInfo : clothingTop;
-  String get bottomText => clothingBottom.isEmpty ? noInfo : clothingBottom;
+  String get topText => _orMissing(clothingTop);
+  String get bottomText => _orMissing(clothingBottom);
+  String get shoesText => _orMissing(shoes);
+  String get accessoriesText => _orMissing(accessories);
+
+  /// 칸 하나가 비었을 때: 분석 중·제공 불가면 그 말을, 아니면 "정보 없음"
+  String _orMissing(String text) {
+    if (text.isNotEmpty) return text;
+    return switch (aiStatus) {
+      AiStatus.pending => aiAnalyzing,
+      AiStatus.unavailable => aiUnavailable,
+      _ => noInfo,
+    };
+  }
+
   String get heightText => height > 0 ? '${height}cm' : noInfo;
   String get bodyText =>
       frmDscd.isEmpty || frmDscd == '기타' ? noInfo : '$frmDscd 체형';
 
   /// 목록·알림에 쓰는 짧은 옷차림 요약
+  /// 서버의 ai.summary가 있으면 그대로, 없으면 상의·하의로 만들어요.
   String get outfitSummary {
+    if (aiSummary.isNotEmpty) return aiSummary.join(' · ');
     final items = [clothingTop, clothingBottom].where((s) => s.isNotEmpty);
-    return items.isEmpty ? '옷차림 $noInfo' : items.join(' · ');
+    if (items.isNotEmpty) return items.join(' · ');
+    return aiPending ? '옷차림 $aiAnalyzing' : outfitNote;
   }
 
   /// "10월 6일"
@@ -135,6 +219,8 @@ class MissingAlert {
   }
 
   static String _str(Object? v) => v == null ? '' : v.toString().trim();
+  static List<String> _list(Object? v) =>
+      v is List ? v.map(_str).where((s) => s.isNotEmpty).toList() : const [];
   static int _int(Object? v) =>
       v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
 }
