@@ -4,8 +4,11 @@
 상태 파일은 tmp_path에 쓰고, 실명·주소·사진이 없는 가짜 데이터만 쓴다.
 """
 import logging
+import os
+import sys
 import threading
 import time
+import types
 from datetime import datetime, timedelta
 
 import pytest
@@ -152,6 +155,8 @@ def test_ended_alert_hidden_from_list_and_detail_after_three_days(run, tracker, 
     assert 2 not in [x["msspsnIdntfccd"] for x in client.get("/alerts").json()["list"]]
     assert client.get("/alerts/2").status_code == 404
     assert client.post("/test/fire/1").status_code == 403  # 실제 모드에서 시연용 API 막힘
+    assert client.post("/test/found/1").status_code == 403
+    assert tracker.status_of(1) == sync.SEARCHING  # 막힌 요청은 상태를 바꾸지 않는다
 
 
 # 조회 회차 처리 --------------------------------------------------------------
@@ -206,9 +211,26 @@ def test_state_file_has_no_names_or_photos(run, tracker):
 
 # 시작·잠금·간격 ---------------------------------------------------------------
 
+def _fake_fcntl():
+    """fcntl 흉내 (윈도우에는 fcntl이 없다). 같은 파일을 다른 파일 객체로 다시 잠그면 BlockingIOError.
+    앞서 잠근 파일 객체가 닫혔으면 잠금이 풀린 것으로 본다 (실제 flock과 같은 동작)."""
+    holders = {}
+
+    def flock(f, flags):
+        key = os.path.realpath(f.name)
+        holder = holders.get(key)
+        if holder is not None and holder is not f and not holder.closed:
+            raise BlockingIOError(f"이미 잠긴 파일: {os.path.basename(key)}")
+        holders[key] = f
+
+    return types.SimpleNamespace(LOCK_EX=2, LOCK_NB=4, flock=flock)
+
+
 @pytest.fixture
 def fresh_sync(monkeypatch, tmp_path):
-    """start()가 쓰는 전역 TRACKER와 환경변수를 테스트용으로 바꾼다. poll_once는 네트워크 없이 기록만."""
+    """start()가 쓰는 전역 TRACKER와 환경변수를 테스트용으로 바꾼다. poll_once는 네트워크 없이 기록만.
+    fcntl은 모든 OS에서 가짜로 바꿔, 윈도우에서도 같은 테스트가 돈다."""
+    monkeypatch.setitem(sys.modules, "fcntl", _fake_fcntl())
     monkeypatch.setattr(sync, "TRACKER", sync.Tracker())
     monkeypatch.setattr(sync, "INTERVAL", sync.INTERVAL)  # start()가 바꾼 전역 간격을 테스트 뒤 되돌린다
     monkeypatch.setenv("SYNC_STATE_DIR", str(tmp_path))
@@ -253,18 +275,47 @@ def test_read_interval(value, expected):
     assert sync.read_interval(value)[0] == expected
 
 
-def test_huge_interval_does_not_kill_sync_thread(monkeypatch, fresh_sync, logs):
-    polled, stops = fresh_sync
-    monkeypatch.setenv("SAFE182_SYNC_INTERVAL_SEC", "99999999")
+def _start_and_wait_first_poll(polled, stops):
+    """start()로 새로 생긴 동기화 스레드를 돌려준다 (앞 테스트에서 남은 스레드와 섞이지 않게)."""
+    before = set(threading.enumerate())
     stops.append(sync.start())
     deadline = time.time() + 5
     while not polled and time.time() < deadline:
         time.sleep(0.01)
     time.sleep(0.1)  # 첫 조회 뒤 대기(stop.wait)에 들어갈 시간
-    thread = next(t for t in threading.enumerate() if t.name == "safe182-sync")
+    return next(t for t in set(threading.enumerate()) - before if t.name == "safe182-sync")
+
+
+def test_huge_interval_does_not_kill_sync_thread(monkeypatch, fresh_sync, logs):
+    polled, stops = fresh_sync
+    monkeypatch.setenv("SAFE182_SYNC_INTERVAL_SEC", "99999999")
+    thread = _start_and_wait_first_poll(polled, stops)
     assert polled and thread.is_alive()
     assert sync.INTERVAL == 86400
     assert any("86400초로 내림" in m for m in logs)
+
+
+def test_wait_error_keeps_thread_alive_without_busy_loop(monkeypatch, fresh_sync, logs):
+    """stop.wait()가 OverflowError를 내도 스레드는 살아 있고, 기본 간격으로 대신 기다린다."""
+    polled, stops = fresh_sync
+    waits = []
+
+    class BrokenFirstWait(threading.Event):
+        def wait(self, timeout=None):
+            waits.append(timeout)
+            if len(waits) == 1:
+                raise OverflowError("timestamp out of range for platform time_t")
+            return super().wait(timeout)
+
+    # sync 모듈 안의 threading만 바꾼다 (다른 코드의 threading.Event는 그대로)
+    monkeypatch.setattr(sync, "threading", types.SimpleNamespace(
+        Event=BrokenFirstWait, Thread=threading.Thread, Lock=threading.Lock))
+    thread = _start_and_wait_first_poll(polled, stops)
+    time.sleep(0.2)
+    assert thread.is_alive()
+    assert len(polled) == 1  # 대기 실패 뒤에도 바로 다시 조회하지 않는다
+    assert waits[:2] == [sync.INTERVAL, sync.DEFAULT_INTERVAL]
+    assert any("대신 기다립니다" in m for m in logs)
 
 
 def test_estimate_daily_calls():
