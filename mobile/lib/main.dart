@@ -25,7 +25,7 @@ class GieokhaejwoApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '기억해줘',
+      title: '다시 곁에',
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
