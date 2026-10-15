@@ -52,12 +52,13 @@ class OutfitFigure extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final f = alert.figureText;
     return CustomPaint(
       painter: _OutfitPainter(
-        top: colorFromText(alert.clothingTop) ?? AppColors.gray400,
-        bottom: colorFromText(alert.clothingBottom) ?? AppColors.gray400,
-        shoe: _shoeColor('${alert.clothingBottom} ${alert.shoes}'),
-        unknown: alert.clothingTop.isEmpty && alert.clothingBottom.isEmpty,
+        top: colorFromText(f.top) ?? AppColors.gray400,
+        bottom: colorFromText(f.bottom) ?? AppColors.gray400,
+        shoe: _shoeColor('${f.bottom} ${f.shoes}'),
+        unknown: f.top.isEmpty && f.bottom.isEmpty,
       ),
     );
   }

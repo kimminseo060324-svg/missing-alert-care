@@ -193,6 +193,29 @@ class MissingAlert {
   String get bodyText =>
       frmDscd.isEmpty || frmDscd == '기타' ? noInfo : '$frmDscd 체형';
 
+  /// 옷차림 그림 색을 뽑을 글자 (상의, 하의, 신발).
+  /// 목록(/alerts)에는 ai.clothing이 없어서 AI 요약 문장으로 대신해요:
+  /// 신발 말이 있으면 신발, 바지·치마 말이 있으면 하의, 남은 첫 문장은 상의.
+  ({String top, String bottom, String shoes}) get figureText {
+    if (clothingTop.isNotEmpty || clothingBottom.isNotEmpty) {
+      return (top: clothingTop, bottom: clothingBottom, shoes: shoes);
+    }
+    var top = '', bottom = '', shoe = '';
+    for (final s in aiSummary) {
+      if (_shoeWords.hasMatch(s)) {
+        if (shoe.isEmpty) shoe = s;
+      } else if (_bottomWords.hasMatch(s)) {
+        if (bottom.isEmpty) bottom = s;
+      } else if (top.isEmpty) {
+        top = s;
+      }
+    }
+    return (top: top, bottom: bottom, shoes: shoe.isNotEmpty ? shoe : shoes);
+  }
+
+  static final _shoeWords = RegExp('운동화|신발|구두|샌들|부츠|슬리퍼|단화');
+  static final _bottomWords = RegExp('바지|청바지|치마|스커트|레깅스|슬랙스');
+
   /// 목록·알림에 쓰는 짧은 옷차림 요약
   /// 서버의 ai.summary가 있으면 그대로, 없으면 상의·하의로 만들어요.
   String get outfitSummary {

@@ -125,6 +125,25 @@ void main() {
       expect(a.accessories, '');
     });
 
+    test('목록: 옷 그림 색은 요약 문장에서 (상의·하의·신발 구분)', () {
+      final f = _alert({
+        'status': 'done',
+        'summary': ['흰색 운동화', '회색 점퍼', '검정 바지', '지팡이 사용'],
+      }).figureText;
+      expect(f.top, '회색 점퍼');
+      expect(f.bottom, '검정 바지');
+      expect(f.shoes, '흰색 운동화');
+    });
+
+    test('상세: 옷 그림 색은 ai.clothing에서, 요약이 없으면 빈 그림', () {
+      final f = _alert(_detailAi).figureText;
+      expect(f.top, '회색 점퍼');
+      expect(f.bottom, '검정 바지');
+      final none = _alert(_empty('pending')).figureText;
+      expect(none.top, '');
+      expect(none.bottom, '');
+    });
+
     test('목록: status와 summary만 와도 한 줄 요약이 나와요', () {
       expect(_alert(_listAi).outfitSummary, '회색 점퍼 · 검정 바지 · 지팡이 사용');
     });
