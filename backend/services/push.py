@@ -3,7 +3,8 @@
 - 키 파일 경로는 .env의 FIREBASE_SERVICE_ACCOUNT_PATH (저장소 밖, 예: ~/.missing-alert-care/...).
   경로가 없거나 파일이 없거나 읽지 못하면 푸시만 끄고 로그 한 줄을 남긴다. 서버는 그대로 돈다.
 - 키 내용, 키 경로, 예외 메시지, 응답 본문은 로그·응답에 넣지 않는다 (예외는 종류와 코드만).
-- 알림 문구와 data에는 실명·상세 주소를 넣지 않는다 (시·군·구, 나이, 성별만).
+- 알림 문구와 data에는 실명을 넣지 않는다. 발생 주소(occrAdres)는 앱팀 합의로 본문 장소 줄과 data address에 넣는다.
+- PUSH_DATA_ONLY=1이면 notification·AndroidNotification 없이 data만 보낸다 (data의 title·body로 앱이 알림을 띄움).
 - send()는 {"status": "sent"|"skipped"|"failed", "reason", "message_id"}를 돌려준다.
 - 발송 타임아웃은 .env FIREBASE_SEND_TIMEOUT_SEC (기본 10초). firebase-admin 앱 옵션 httpTimeout에
   초 단위로 넘긴다 (SDK 문서: "httpTimeout ... default timeout of 120 seconds", 인증 토큰 갱신에도 같은 값).
@@ -18,17 +19,19 @@
 """
 import logging
 import os
+import re
 import threading
 import time
 from pathlib import Path
 
 TOPIC = "missing_alerts_osan"
 CHANNEL_ID = "missing_alerts"
-DATA_VERSION = "1"
+DATA_VERSION = "2"
 DEFAULT_SEND_TIMEOUT = 10.0  # 초 (FIREBASE_SEND_TIMEOUT_SEC)
 FIRE_DEDUP_SEC = 60  # 시연용 API로 같은 경보·같은 종류(issued/closed)·같은 상태를 이 시간 안에 다시 보내지 않는다
 UNKNOWN_REGION = "지역 미확인"
 GENDER = {"남자": "남성", "여자": "여성", "남": "남성", "여": "여성"}
+SEX = {"남자": "남자", "여자": "여자", "남": "남자", "여": "여자"}  # data의 sex 값
 _SIDO = ("서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종", "경기", "강원",
          "충북", "충남", "충청", "전북", "전남", "전라", "경북", "경남", "경상", "제주")
 
@@ -110,19 +113,48 @@ def _age(raw):
     return None
 
 
+def _height(raw):
+    m = re.match(r"\s*(\d+)", str(raw.get("height") or ""))
+    return m.group(1) if m and int(m.group(1)) > 0 else ""
+
+
+def _ai_summary(raw):
+    """AI 옷차림 요약을 " · "로 이은 것. 추출이 끝나지 않았거나(pending·unavailable) 요약이 없으면 ""."""
+    from services import ai_features  # 순환 import 방지
+    ai = ai_features.view(raw.get("msspsnIdntfccd"))
+    return " · ".join(ai["summary"]) if ai["status"] == "done" else ""
+
+
+def data_only():
+    """PUSH_DATA_ONLY=1이면 notification 없이 data만 보낸다 (앱이 직접 알림을 띄움). 기본 0."""
+    return (os.getenv("PUSH_DATA_ONLY") or "0").strip() == "1"
+
+
 def build(event, raw, status):
-    """(제목, 본문, data). data 값은 모두 문자열."""
+    """(제목, 본문, data). data 값은 모두 문자열 (없는 값은 "").
+
+    issued 본문은 여러 줄 ("\n"): 찾고 있어요 / 옷차림(AI 요약, done일 때만) / 인상(나이·성별·키) / 장소(발생 주소).
+    값이 없는 줄은 뺀다. closed(종료·발견)는 한 줄. 실명은 넣지 않는다.
+    """
     region = region_of(raw.get("occrAdres"))
+    age, gender = _age(raw), GENDER.get(str(raw.get("sexdstnDscd") or "").strip())
+    height, address, summary = _height(raw), (raw.get("occrAdres") or "").strip(), _ai_summary(raw)
     if event == "closed" and status == "발견완료":
         title, body = "실종자 발견", f"{region} 실종자를 찾았어요"
     elif event == "closed":
         title, body = "실종경보 종료", f"{region} 실종경보가 종료됐어요"
     else:
-        age, gender = _age(raw), GENDER.get(str(raw.get("sexdstnDscd") or "").strip())
         title = "실종경보"
-        body = f"{region}에서 {age}세 {gender}을 찾고 있어요" if age and gender else f"{region}에서 실종자를 찾고 있어요"
+        looks = " · ".join(x for x in [f"{age}세 {gender}" if age and gender else "", f"{height}cm" if height else ""] if x)
+        lines = [f"{region}에서 {age}세 {gender}을 찾고 있어요" if age and gender else f"{region}에서 실종자를 찾고 있어요",
+                 f"옷차림: {summary}" if summary else "",
+                 f"인상: {looks}" if looks else "",
+                 f"장소: {address}" if address else ""]
+        body = "\n".join(x for x in lines if x)
     data = {"type": "missing_alert", "event": event, "alert_id": str(raw.get("msspsnIdntfccd", "")),
-            "status": str(status), "region": region, "version": DATA_VERSION}
+            "status": str(status), "region": region, "version": DATA_VERSION,
+            "title": title, "body": body, "ai_summary": summary, "height": height, "address": address,
+            "age": str(age or ""), "sex": SEX.get(str(raw.get("sexdstnDscd") or "").strip(), "")}
     point = coordinates(raw)
     if point:
         data["lat"], data["lng"] = str(point[0]), str(point[1])
@@ -132,13 +164,16 @@ def build(event, raw, status):
 def _send_message(title, body, data):
     """실제 발송. 메시지 ID를 돌려준다. 테스트에서는 이 함수를 바꿔 끼운다."""
     from firebase_admin import messaging
-    msg = messaging.Message(
-        topic=TOPIC,
-        notification=messaging.Notification(title=title, body=body),
-        data=data,
-        android=messaging.AndroidConfig(priority="high", notification=messaging.AndroidNotification(
-            channel_id=CHANNEL_ID, tag=f"alert_{data['alert_id']}")),  # 같은 경보의 issued·closed는 한 알림으로 바뀜
-    )
+    if data_only():  # 앱이 data의 title·body로 직접 알림을 띄운다
+        msg = messaging.Message(topic=TOPIC, data=data, android=messaging.AndroidConfig(priority="high"))
+    else:
+        msg = messaging.Message(
+            topic=TOPIC,
+            notification=messaging.Notification(title=title, body=body),
+            data=data,
+            android=messaging.AndroidConfig(priority="high", notification=messaging.AndroidNotification(
+                channel_id=CHANNEL_ID, tag=f"alert_{data['alert_id']}")),  # 같은 경보의 issued·closed는 한 알림으로 바뀜
+        )
     return messaging.send(msg, app=_app)
 
 
