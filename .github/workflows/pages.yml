@@ -2,7 +2,7 @@ name: Deploy Flutter web to GitHub Pages
 
 on:
   push:
-    branches: [feat/mobile-web-pages, develop]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -24,17 +24,26 @@ jobs:
           flutter-version: '3.41.9'
           channel: stable
           cache: true
-      - name: Add web platform
+      - name: Install packages
         working-directory: mobile
-        run: flutter create . --platforms web --project-name gieokhaejwo
+        run: flutter pub get --enforce-lockfile
+      - name: Analyze
+        working-directory: mobile
+        run: flutter analyze
+      - name: Test
+        working-directory: mobile
+        run: flutter test
       - name: Build web
         working-directory: mobile
+        run: flutter build web --release --base-href /missing-alert-care/app/
+      - name: Assemble site
         run: |
-          flutter pub get
-          flutter build web --release --base-href /missing-alert-care/
+          mkdir -p _site/app
+          cp index.html about.html _site/
+          cp -r mobile/build/web/. _site/app/
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: mobile/build/web
+          path: _site
 
   deploy:
     needs: build

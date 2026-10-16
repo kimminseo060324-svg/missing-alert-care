@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 
-/// 앱 첫 화면: 연한 바탕에 길이 집 쪽으로 생기고 별이 톡, 아래 "다시 곁에".
+/// 앱 첫 화면: 연한 바탕에 길이 집 쪽으로 생기고 별이 톡, 아래 "다시곁에".
 /// 움직임이 끝나면 [next] 화면으로 넘어가요.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key, required this.next});
@@ -67,11 +67,11 @@ class _SplashScreenState extends State<SplashScreen> {
               'assets/images/splash_logo.webp',
               width: width * 0.43,
               height: width * 0.43,
-              semanticLabel: '다시 곁에 로고',
+              semanticLabel: '다시곁에 로고',
             ),
             SizedBox(height: width * 0.06),
             Text(
-              '다시 곁에',
+              '다시곁에',
               style: appText(
                 width * 0.089,
                 weight: FontWeight.w700,

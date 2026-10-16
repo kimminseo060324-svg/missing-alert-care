@@ -39,7 +39,7 @@ class _DemoMenuScreenState extends State<DemoMenuScreen> {
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 16,
-        title: const Text('다시 곁에 · 시연 메뉴'),
+        title: const Text('다시곁에 · 시연 메뉴'),
         actions: [
           TextButton.icon(
             onPressed: _openSettings,
