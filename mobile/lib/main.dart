@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'data/api_settings.dart';
@@ -10,7 +11,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ApiSettings.load(); // 저장해 둔 서버 주소
   runApp(GieokhaejwoApp(navigatorKey: PushService.navigatorKey));
-  await PushService.start();
+  if (!kIsWeb) await PushService.start(); // 웹(GitHub Pages)에서는 푸시를 쓰지 않음
 }
 
 class GieokhaejwoApp extends StatelessWidget {
@@ -25,7 +26,7 @@ class GieokhaejwoApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '다시 곁에',
+      title: '다시곁에',
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),

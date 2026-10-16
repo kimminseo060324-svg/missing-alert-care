@@ -4,7 +4,7 @@
     <!-- 우리 서버에서 경보를 읽어요 -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="다시 곁에"
+        android:label="다시곁에"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>기억해줘 · 서비스 소개</title>
-<meta name="description" content="기억해줘는 실종경보가 발령되는 순간 일반 안전안내와 구분되는 알림을 보내고, 실종자의 사진·옷차림·마지막 목격 장소를 기억해 제보하도록 돕는 라이프케어 서비스입니다.">
+<title>다시곁에 · 서비스 소개</title>
+<meta name="description" content="다시곁에는 실종경보가 발령되는 순간 일반 안전안내와 구분되는 알림을 보내고, 실종자의 사진·옷차림·마지막 목격 장소를 기억해 제보하도록 돕는 라이프케어 서비스입니다.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -33,7 +33,7 @@ nav.menu{display:flex;gap:20px;margin-left:auto;flex-wrap:wrap;align-items:cente
 nav.menu a{color:var(--ink-2);text-decoration:none;font-size:14px;font-weight:500}
 nav.menu a:hover{color:var(--ink)}
 nav.menu a.try{background:var(--deep);color:#fff;padding:8px 14px;border-radius:10px}
-@media (max-width:760px){nav.menu a:not(.try){display:none}}
+@media (max-width:760px){nav.menu a:not(.try),nav.menu a.app-link{display:none}}
 
 .hero{padding:72px 0 56px}
 .hero .wrap{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:48px;align-items:center}
@@ -149,7 +149,7 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:12px 32px;justify-content:space-bet
   <div class="wrap">
     <a class="brand" href="index.html">
       <span class="mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="8" r="4"/><path d="M3 20c0-3.5 3-6 7-6"/><circle cx="17" cy="16" r="3"/><path d="M19.2 18.2 21.5 20.5"/></svg></span>
-      기억해줘
+      다시곁에
     </a>
     <nav class="menu" aria-label="주요 메뉴">
       <a href="#problem">개발 배경</a>
@@ -159,6 +159,7 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:12px 32px;justify-content:space-bet
       <a href="#privacy">개인정보 원칙</a>
       <a href="https://github.com/kimminseo060324-svg/missing-alert-care" rel="noopener">GitHub</a>
       <a class="try" href="index.html">서비스 바로 사용하기</a>
+      <a class="try app-link" href="./app/">MVP 체험하기</a>
     </nav>
   </div>
 </header>
@@ -167,11 +168,12 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:12px 32px;justify-content:space-bet
   <div class="hero">
     <div class="wrap">
       <div>
-        <p class="name">기억해줘 · 실종경보 인지 강화 서비스</p>
+        <p class="name">다시곁에 · 실종경보 인지 강화 서비스</p>
         <h1>실종경보는<br>다른 안내와 달라야 합니다</h1>
-        <p class="lead">기억해줘는 실종경보가 발령되는 순간 일반 안전안내와 구분되는 전용 알림을 보내고, 실종자의 사진·옷차림·마지막 목격 장소를 빠르게 기억해 제보할 수 있도록 돕는 라이프케어 서비스입니다.</p>
+        <p class="lead">다시곁에는 실종경보가 발령되는 순간 일반 안전안내와 구분되는 전용 알림을 보내고, 실종자의 사진·옷차림·마지막 목격 장소를 빠르게 기억해 제보할 수 있도록 돕는 라이프케어 서비스입니다.</p>
         <div class="btns">
           <a class="btn primary" href="index.html">서비스 바로 사용하기</a>
+          <a class="btn primary" href="./app/">MVP 체험하기</a>
           <a class="btn ghost" href="#screens">앱 화면 보기</a>
         </div>
         <p class="note">2026 한신 AI·SW 페스티벌 AX 라이프케어 챌린지 출품작 · Android·iOS 앱과 웹으로 개발 중</p>
@@ -181,7 +183,7 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:12px 32px;justify-content:space-bet
         <div class="time" aria-hidden="true">14:21</div>
         <div class="toggle" role="group" aria-label="알림 방식 선택">
           <button type="button" id="btn-old" aria-pressed="false">기존 문자</button>
-          <button type="button" id="btn-new" aria-pressed="true">기억해줘</button>
+          <button type="button" id="btn-new" aria-pressed="true">다시곁에</button>
         </div>
         <div class="stack" id="stack-new">
           <div class="n-gen">
@@ -351,7 +353,7 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:12px 32px;justify-content:space-bet
   <section id="platforms">
     <div class="wrap">
       <h2>어디서 쓰나요</h2>
-      <p class="intro">모든 플랫폼은 기억해줘 서버를 통해 같은 경보 정보를 받습니다.</p>
+      <p class="intro">모든 플랫폼은 다시곁에 서버를 통해 같은 경보 정보를 받습니다.</p>
       <div class="platforms">
         <article><span class="st now">MVP 개발 중</span><h3>Android 앱</h3><p>실종경보 전용 알림 채널로 진동과 소리를 구분하고, 사진과 버튼이 있는 알림을 보냅니다.</p></article>
         <article><span class="st next">개발 예정</span><h3>iOS 앱</h3><p>사진이 있는 알림과 잠금화면 실시간 현황 카드로 경보를 구분해 보여줄 계획입니다.</p></article>
@@ -424,7 +426,7 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:12px 32px;justify-content:space-bet
 
 <footer>
   <div class="wrap">
-    <span>© 2026 기억해줘 팀 · 이 페이지의 실종자 정보는 모두 가상 데이터입니다.</span>
+    <span>© 2026 닭계흰노 팀 · 이 페이지의 실종자 정보는 모두 가상 데이터입니다.</span>
     <span>문의 <a href="mailto:beasubin05@gmail.com">beasubin05@gmail.com</a> · <a href="https://github.com/kimminseo060324-svg/missing-alert-care" rel="noopener">GitHub</a></span>
   </div>
 </footer>

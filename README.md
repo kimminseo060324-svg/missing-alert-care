@@ -133,7 +133,7 @@ https://www.data.go.kr/data/15134001/openapi.do
 
 ```
 missing-alert-care/
-├── index.html      # 기억해줘 웹 서비스 페이지
+├── index.html      # 다시곁에 웹 서비스 페이지
 ├── about.html      # 프로젝트 소개 페이지
 ├── mobile/         # Flutter 앱
 ├── backend/        # FastAPI 서버
