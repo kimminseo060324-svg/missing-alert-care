@@ -33,7 +33,7 @@ nav.menu{display:flex;gap:20px;margin-left:auto;flex-wrap:wrap;align-items:cente
 nav.menu a{color:var(--ink-2);text-decoration:none;font-size:14px;font-weight:500}
 nav.menu a:hover{color:var(--ink)}
 nav.menu a.try{background:var(--deep);color:#fff;padding:8px 14px;border-radius:10px}
-@media (max-width:760px){nav.menu a:not(.try){display:none}}
+@media (max-width:760px){nav.menu a:not(.try),nav.menu a.app-link{display:none}}
 
 .hero{padding:72px 0 56px}
 .hero .wrap{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:48px;align-items:center}
@@ -159,7 +159,7 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:12px 32px;justify-content:space-bet
       <a href="#privacy">개인정보 원칙</a>
       <a href="https://github.com/kimminseo060324-svg/missing-alert-care" rel="noopener">GitHub</a>
       <a class="try" href="index.html">서비스 바로 사용하기</a>
-      <a class="try" href="./app/">MVP 체험하기</a>
+      <a class="try app-link" href="./app/">MVP 체험하기</a>
     </nav>
   </div>
 </header>
