@@ -49,7 +49,7 @@ void main() {
 
   testWidgets('첫 화면 로고가 끝나면 시연 메뉴에 화면 7개가 보여요', (tester) async {
     await tester.pumpWidget(const GieokhaejwoApp());
-    expect(find.text('기억해줘'), findsOneWidget);
+    expect(find.text('다시 곁에'), findsOneWidget);
     await tester.pump(SplashScreen.duration);
     await tester.pumpAndSettle();
     expect(find.text('경보 목록'), findsOneWidget);
