@@ -145,3 +145,4 @@ venv/
 
 # AI 옷차림 추출 평가 결과
 results/
+.DS_Store

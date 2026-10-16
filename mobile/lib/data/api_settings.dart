@@ -52,7 +52,7 @@ class ApiSettings {
       final prefs = await SharedPreferences.getInstance();
       current = ApiSettings(
         baseUrl: prefs.getString(_keyUrl) ?? defaultBaseUrl,
-        useBuiltIn: prefs.getBool(_keyBuiltIn) ?? false,
+        useBuiltIn: prefs.getBool(_keyBuiltIn) ?? kIsWeb, // 웹은 기본으로 앱 안 가짜 데이터
       );
     } catch (e) {
       debugPrint('서버 설정을 읽지 못했어요: $e');
