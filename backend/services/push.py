@@ -3,8 +3,12 @@
 - 키 파일 경로는 .env의 FIREBASE_SERVICE_ACCOUNT_PATH (저장소 밖, 예: ~/.missing-alert-care/...).
   경로가 없거나 파일이 없거나 읽지 못하면 푸시만 끄고 로그 한 줄을 남긴다. 서버는 그대로 돈다.
 - 키 내용, 키 경로, 예외 메시지, 응답 본문은 로그·응답에 넣지 않는다 (예외는 종류와 코드만).
-- 알림 문구와 data에는 실명을 넣지 않는다. 발생 주소(occrAdres)는 앱팀 합의로 본문 장소 줄과 data address에 넣는다.
+- 알림 문구와 data에는 실명을 넣지 않는다. 발생 주소(occrAdres)는 원문을 그대로 넣지 않고 place_of()로
+  시·군·구 + 읍·면·동까지만 줄여서 본문 장소 줄과 data address에 넣는다 (번지·상세 주소는 푸시에 없음).
+- closed(경보종료·발견완료) 푸시의 data는 앱에서 쓰지 않는 address·age·sex·height·ai_summary를 ""로 보낸다
+  (키는 유지해 payload 형식(version 2)은 그대로).
 - PUSH_DATA_ONLY=1이면 notification·AndroidNotification 없이 data만 보낸다 (data의 title·body로 앱이 알림을 띄움).
+  data만 받아 알림을 띄우는 앱(PR #25 이후)에서만 쓸 수 있다. 그 전 앱은 notification이 없으면 알림을 띄우지 못한다.
 - send()는 {"status": "sent"|"skipped"|"failed", "reason", "message_id"}를 돌려준다.
 - 발송 타임아웃은 .env FIREBASE_SEND_TIMEOUT_SEC (기본 10초). firebase-admin 앱 옵션 httpTimeout에
   초 단위로 넘긴다 (SDK 문서: "httpTimeout ... default timeout of 120 seconds", 인증 토큰 갱신에도 같은 값).
@@ -84,9 +88,8 @@ def init():
         return False
 
 
-def region_of(address):
-    """발생 주소 → 시·군·구 ("경기 오산시 양산동" → "오산시", "경기 수원시 영통구 …" → "수원시 영통구").
-    시·군·구가 없으면(세종 등) 시·도, 그것도 없으면 "지역 미확인"."""
+def _split_address(address):
+    """발생 주소 → (시·도, [시·군·구 …], 읍·면·동). 없는 것은 None/[]/None."""
     tokens = (address or "").split()
     sido = None
     if tokens and tokens[0].startswith(_SIDO) and (
@@ -97,7 +100,28 @@ def region_of(address):
         if not t.endswith(("시", "군", "구")):
             break
         parts.append(t)
+    rest = tokens[len(parts):]
+    town = None
+    if rest and (re.fullmatch(r"\D+(읍|면|동)", rest[0]) or re.fullmatch(r"\D+\d+가", rest[0])):  # 양산동, 종로1가
+        town = rest[0]
+    return sido, parts, town
+
+
+def region_of(address):
+    """발생 주소 → 시·군·구 ("경기 오산시 양산동" → "오산시", "경기 수원시 영통구 …" → "수원시 영통구").
+    시·군·구가 없으면(세종 등) 시·도, 그것도 없으면 "지역 미확인"."""
+    sido, parts, _ = _split_address(address)
     return " ".join(parts) or sido or UNKNOWN_REGION
+
+
+def place_of(address):
+    """푸시에 넣는 장소. 시·군·구 + 읍·면·동까지만 ("경기 오산시 양산동 123-4 ○○아파트" → "오산시 양산동").
+    번지·건물명 등 그 뒤는 버린다. 시·군·구·읍·면·동을 하나도 못 찾으면 "" (장소 줄을 넣지 않는다)."""
+    sido, parts, town = _split_address(address)
+    if not parts and not town:
+        return ""
+    head = parts or ([sido] if sido else [])  # 시·군·구가 없으면(세종 등) 시·도를 앞에 둔다
+    return " ".join(x for x in [*head, town] if x)
 
 
 def coordinates(raw):
@@ -133,17 +157,19 @@ def data_only():
 def build(event, raw, status):
     """(제목, 본문, data). data 값은 모두 문자열 (없는 값은 "").
 
-    issued 본문은 여러 줄 ("\n"): 찾고 있어요 / 옷차림(AI 요약, done일 때만) / 인상(나이·성별·키) / 장소(발생 주소).
-    값이 없는 줄은 뺀다. closed(종료·발견)는 한 줄. 실명은 넣지 않는다.
+    issued 본문은 여러 줄 ("\n"): 찾고 있어요 / 옷차림(AI 요약, done일 때만) / 인상(나이·성별·키) / 장소(읍·면·동까지).
+    값이 없는 줄은 뺀다. closed(종료·발견)는 한 줄이고 data의 address·age·sex·height·ai_summary는 "" (앱에서 안 씀).
+    실명과 원본 주소(번지·건물)는 넣지 않는다.
     """
     region = region_of(raw.get("occrAdres"))
-    age, gender = _age(raw), GENDER.get(str(raw.get("sexdstnDscd") or "").strip())
-    height, address, summary = _height(raw), (raw.get("occrAdres") or "").strip(), _ai_summary(raw)
-    if event == "closed" and status == "발견완료":
-        title, body = "실종자 발견", f"{region} 실종자를 찾았어요"
-    elif event == "closed":
-        title, body = "실종경보 종료", f"{region} 실종경보가 종료됐어요"
+    if event == "closed":
+        title, body = (("실종자 발견", f"{region} 실종자를 찾았어요") if status == "발견완료"
+                       else ("실종경보 종료", f"{region} 실종경보가 종료됐어요"))
+        age, height, address, summary, sex = None, "", "", "", ""
     else:
+        age, gender = _age(raw), GENDER.get(str(raw.get("sexdstnDscd") or "").strip())
+        height, address, summary = _height(raw), place_of(raw.get("occrAdres")), _ai_summary(raw)
+        sex = SEX.get(str(raw.get("sexdstnDscd") or "").strip(), "")
         title = "실종경보"
         looks = " · ".join(x for x in [f"{age}세 {gender}" if age and gender else "", f"{height}cm" if height else ""] if x)
         lines = [f"{region}에서 {age}세 {gender}을 찾고 있어요" if age and gender else f"{region}에서 실종자를 찾고 있어요",
@@ -154,7 +180,7 @@ def build(event, raw, status):
     data = {"type": "missing_alert", "event": event, "alert_id": str(raw.get("msspsnIdntfccd", "")),
             "status": str(status), "region": region, "version": DATA_VERSION,
             "title": title, "body": body, "ai_summary": summary, "height": height, "address": address,
-            "age": str(age or ""), "sex": SEX.get(str(raw.get("sexdstnDscd") or "").strip(), "")}
+            "age": str(age or ""), "sex": sex}
     point = coordinates(raw)
     if point:
         data["lat"], data["lng"] = str(point[0]), str(point[1])

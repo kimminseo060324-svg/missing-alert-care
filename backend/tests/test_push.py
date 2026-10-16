@@ -69,16 +69,65 @@ def test_issued_message_has_no_name_and_string_data():
            "occrAdres": "경기 오산시 양산동 123"}
     title, body, data = push.build("issued", raw, "수색중")
     assert title == "실종경보"
-    assert body == "오산시에서 82세 남성을 찾고 있어요\n인상: 82세 남성\n장소: 경기 오산시 양산동 123"  # 키 없음, AI 없음
+    assert body == "오산시에서 82세 남성을 찾고 있어요\n인상: 82세 남성\n장소: 오산시 양산동"  # 키 없음, AI 없음. 번지는 뺌
     assert data == {"type": "missing_alert", "event": "issued", "alert_id": "9990001", "status": "수색중",
                     "region": "오산시", "version": "2", "title": title, "body": body, "ai_summary": "",
-                    "height": "", "address": "경기 오산시 양산동 123", "age": "82", "sex": "남자"}  # 좌표 없으면 lat/lng 없음
+                    "height": "", "address": "오산시 양산동", "age": "82", "sex": "남자"}  # 좌표 없으면 lat/lng 없음
     assert "홍길동" not in title + body + str(data)
+
+
+@pytest.mark.parametrize("address, expected", [
+    ("경기 오산시 양산동 123-4 ○○아파트 101동", "오산시 양산동"),
+    ("경기 오산시 양산동 ", "오산시 양산동"),
+    ("경기도 수원시 영통구 매탄동 1234", "수원시 영통구 매탄동"),
+    ("서울특별시 종로구 종로1가 12", "종로구 종로1가"),
+    ("세종특별자치시 조치원읍 신흥리 5", "세종특별자치시 조치원읍"),
+    ("경기 오산시", "오산시"),
+    ("경기 오산시 123번길 7", "오산시"),  # 읍·면·동이 아니면 시·군·구까지만
+    ("양산동 어딘가", "양산동"),
+    ("", ""),
+    (None, ""),
+    ("어딘가 123", ""),
+])
+def test_place_of_limits_to_town(address, expected):
+    assert push.place_of(address) == expected
+
+
+def test_issued_push_never_contains_original_address(monkeypatch):
+    set_ai(monkeypatch, 9990001, "done", ["회색 점퍼"])
+    raw = {**RICH, "occrAdres": "경기 오산시 양산동 123-4 행복아파트 101동 202호"}
+    title, body, data = push.build("issued", raw, "수색중")
+    assert data["address"] == "오산시 양산동" and body.split("\n")[-1] == "장소: 오산시 양산동"
+    for secret in ("123-4", "행복아파트", "101동", "202호"):
+        assert secret not in title + body + str(data)
+
+
+@pytest.mark.parametrize("status", ["경보종료", "발견완료"])
+def test_closed_push_drops_personal_fields(monkeypatch, status):
+    set_ai(monkeypatch, 9990001, "done", ["회색 점퍼", "검정 바지"])
+    raw = {**RICH, "occrAdres": "경기 오산시 양산동 123-4 행복아파트"}
+    title, body, data = push.build("closed", raw, status)
+    assert set(data) == DATA_KEYS  # 키는 유지 (payload 형식 그대로)
+    assert {k: data[k] for k in ("address", "age", "sex", "height", "ai_summary")} == {
+        "address": "", "age": "", "sex": "", "height": "", "ai_summary": ""}
+    assert data["region"] == "오산시" and data["event"] == "closed" and data["status"] == status
+    for secret in ("양산동", "123-4", "행복아파트", "82", "남", "168", "회색 점퍼", "홍길동"):
+        assert secret not in title + body + str(data)
+
+
+def test_closed_push_via_api_has_no_personal_data(client, fcm):
+    client.post("/test/fire/9990001")
+    client.post("/test/end/9990001")
+    client.post("/test/found/9990001")
+    closed = [d for _, _, d in fcm.sent if d["event"] == "closed"]
+    assert len(closed) == 2
+    for d in closed:
+        assert (d["address"], d["age"], d["sex"], d["height"], d["ai_summary"]) == ("", "", "", "", "")
 
 
 def test_issued_fallback_and_closed_text():
     _, body, _ = push.build("issued", {"msspsnIdntfccd": 1, "occrAdres": "경기 오산시 궐동"}, "수색중")
-    assert body == "오산시에서 실종자를 찾고 있어요\n장소: 경기 오산시 궐동"
+    assert body == "오산시에서 실종자를 찾고 있어요\n장소: 오산시 궐동"
     title, body, data = push.build("closed", {"msspsnIdntfccd": 1}, "경보종료")
     assert (title, body) == ("실종경보 종료", "지역 미확인 실종경보가 종료됐어요")
     assert data["event"] == "closed" and data["status"] == "경보종료"
@@ -360,9 +409,9 @@ def test_issued_body_four_lines_when_ai_done(monkeypatch):
     set_ai(monkeypatch, 9990001, "done", ["회색 점퍼", "검정 바지", "지팡이 사용"])
     _, body, data = push.build("issued", RICH, "수색중")
     assert body.split("\n") == ["오산시에서 82세 남성을 찾고 있어요", "옷차림: 회색 점퍼 · 검정 바지 · 지팡이 사용",
-                                 "인상: 82세 남성 · 168cm", "장소: 경기 오산시 양산동"]
+                                 "인상: 82세 남성 · 168cm", "장소: 오산시 양산동"]
     assert data["ai_summary"] == "회색 점퍼 · 검정 바지 · 지팡이 사용"
-    assert (data["height"], data["address"], data["age"], data["sex"]) == ("168", "경기 오산시 양산동", "82", "남자")
+    assert (data["height"], data["address"], data["age"], data["sex"]) == ("168", "오산시 양산동", "82", "남자")
     assert data["body"] == body and data["title"] == "실종경보"
     assert "홍길동" not in body + str(data)
 
@@ -371,7 +420,7 @@ def test_issued_body_four_lines_when_ai_done(monkeypatch):
 def test_issued_body_three_lines_without_ai(monkeypatch, status):
     set_ai(monkeypatch, 9990001, status, [])
     _, body, data = push.build("issued", RICH, "수색중")
-    assert body.split("\n") == ["오산시에서 82세 남성을 찾고 있어요", "인상: 82세 남성 · 168cm", "장소: 경기 오산시 양산동"]
+    assert body.split("\n") == ["오산시에서 82세 남성을 찾고 있어요", "인상: 82세 남성 · 168cm", "장소: 오산시 양산동"]
     assert data["ai_summary"] == ""
 
 
